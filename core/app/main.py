@@ -116,6 +116,7 @@ for r in (cycles, nodes, specs, tickets, orders, messages, artifacts, dashboard)
 
 # HQ 자신도 A2A 에이전트로 노출 (선택 — BRIEF §2)
 app.include_router(a2a_server.router)
+app.include_router(artifacts.files_router)
 
 
 @app.get("/api/health", tags=["health"])

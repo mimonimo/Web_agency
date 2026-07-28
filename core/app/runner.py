@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -189,10 +190,298 @@ async def _execute_sim(cycle_id: int, sdef: Any) -> dict[str, Any]:
 
 
 async def _execute_a2a(cycle_id: int, sdef: Any) -> dict[str, Any]:
-    """실제 학생 노드 호출 — Phase 2 에서 a2a_client 를 연결한다."""
-    raise NotImplementedError(
-        "EXECUTOR=a2a 는 Phase 2(노드 A2A 어댑터) 이후에 쓸 수 있다"
+    """실제 학생 노드의 Hermes 를 A2A 로 호출한다 (BRIEF §5.3).
+
+    병렬 단계면 해당 역할들에게 **동시에** 보내고 전부 끝날 때까지 기다린다.
+    """
+    from . import a2a_client as a2a
+    from .models import Node
+
+    out_dir = REPO_ROOT / "runs" / str(cycle_id) / sdef.id / "output"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    roles = list(sdef.roles) or ["pm"]
+
+    db = SessionLocal()
+    try:
+        urls = {n.role: n.a2a_url
+                for n in db.scalars(select(Node).where(Node.role.in_(roles))).all()}
+    finally:
+        db.close()
+
+    missing = [r for r in roles if not urls.get(r)]
+    if missing:
+        raise RuntimeError(f"노드가 등록되지 않았다: {', '.join(missing)}")
+
+    results = await asyncio.gather(
+        *[_one_role(cycle_id, sdef, r, urls[r], out_dir) for r in roles],
+        return_exceptions=True,
     )
+
+    artifacts: list[str] = []
+    errors: list[str] = []
+    for role, res in zip(roles, results):
+        if isinstance(res, Exception):
+            errors.append(f"{role}: {res}")
+        else:
+            artifacts.extend(res)
+
+    if errors and not artifacts:
+        raise RuntimeError("; ".join(errors))
+
+    # ★ S2 는 11개 AGENT.md 초안을 만든다 (인수 #12).
+    if sdef.emits_specs:
+        bodies = _harvest_spec_bodies(out_dir)
+        # 한 번의 호출로 11개를 다 쓰게 하면 모델이 중간에 멈춘다.
+        # 빠진 역할은 **하나씩 따로** 기획에게 다시 시킨다. 느리지만 확실하다.
+        planner_url = _role_url("planner")
+        for role in ROLES:
+            if spec_ok(bodies.get(role, "")):
+                continue
+            if not planner_url:
+                break
+            try:
+                body = await _draft_one_spec(cycle_id, sdef, planner_url, role)
+                if spec_ok(body):
+                    bodies[role] = body
+                elif body and len(body.strip()) > len(bodies.get(role, "")):
+                    bodies[role] = body      # 완벽하진 않아도 있는 게 낫다
+            except Exception:
+                pass                       # 실패해도 기본 템플릿으로 채운다
+
+        db = SessionLocal()
+        try:
+            cycle = db.get(Cycle, cycle_id)
+            services.emit_spec_drafts(
+                db, cycle, {r: bodies.get(r, _draft_body(r)) for r in ROLES})
+        finally:
+            db.close()
+
+    return {"output_dir": str(out_dir.relative_to(REPO_ROOT)), "artifacts": artifacts}
+
+
+SPEC_SECTIONS = ("나의 역할", "내 파일", "출력 형식", "금지", "애매할 때", "완료 보고")
+
+
+def spec_ok(body: str) -> bool:
+    """AGENT.md 초안이 쓸 만한가 (BRIEF §4.1 의 6칸).
+
+    학생이 **고칠 수 있어야** 의미가 있다. 한 줄짜리 압축본은 고칠 자리가 없다.
+    - 6칸이 `## 제목` 으로 나뉘어 있을 것
+    - 각 칸에 최소한의 알맹이가 있을 것
+    """
+    if not body or len(body.strip()) < 300:
+        return False
+    text = body
+    headed = sum(1 for sec in SPEC_SECTIONS if f"## {sec}" in text)
+    return headed >= 5
+
+
+def _role_url(role: str) -> str | None:
+    from .models import Node
+    db = SessionLocal()
+    try:
+        n = db.scalar(select(Node).where(Node.role == role))
+        return n.a2a_url if n else None
+    finally:
+        db.close()
+
+
+ROLE_HINT = {
+    "pm": "일정·병목 관리와 우선순위 판단",
+    "planner": "요구사항 해석과 화면 정의",
+    "sales": "고객 접수·범위 합의·견적",
+    "sysadmin": "실행 환경과 배포",
+    "designer": "화면 디자인과 디자인 토큰",
+    "frontend": "화면 구현",
+    "backend": "서버·API 구현",
+    "dba": "데이터 모델과 쿼리",
+    "security": "취약점 점검과 데이터 보호",
+    "qa": "테스트와 결함 발견",
+    "customer": "고객 입장의 검수와 문의",
+}
+
+
+async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
+    """기획에게 역할 하나의 AGENT.md 만 쓰게 한다 (BRIEF §4.1 의 6칸)."""
+    from . import a2a_client as a2a
+
+    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    instruction = (
+        f"`{role}` 역할({ROLE_HINT.get(role, role)}) 한 개의 AGENT.md 초안만 쓴다.\n"
+        f"파일 경로는 정확히 `agents/{role}/AGENT.md` 다. 다른 파일은 만들지 마라.\n\n"
+        "다음 6칸을 반드시 이 순서로 포함한다:\n"
+        "  ## 나의 역할 / ## 내 파일 / ## 출력 형식 / ## 금지 / ## 애매할 때 / ## 완료 보고\n\n"
+        "이번 요구사항에서 **이 역할이 특별히 조심해야 할 것**을 '금지' 칸에 최소 1줄 넣는다.\n"
+        "초안은 완벽할 필요 없다. 학생이 자기 전문 지식으로 보강할 것이다.\n"
+        "front-matter(--- 머리말)는 쓰지 마라. HQ 가 붙인다."
+    )
+    req = a2a.TaskRequest(
+        role="planner", cycle_id=cycle_id, step_id=sdef.id,
+        step_name=f"{role} AGENT.md 초안",
+        task="draft_one_spec",
+        spec_url=f"{hq}/api/specs/planner/raw",
+        context_urls=(f"{hq}/api/files?path=runs/{cycle_id}/{sdef.id}/output/SRS.md",),
+        outputs=(f"agents/{role}/AGENT.md",),
+        timeout_sec=300,
+        order=_order_text(cycle_id),
+        instruction=instruction,
+        work_key=f"{sdef.id}-{role}",     # 역할마다 작업 디렉터리를 분리한다
+    )
+    sent = await a2a.send_message(url, req)
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        await asyncio.sleep(4)
+        t = await a2a.get_task(url, sent.task_id)
+        if t.state == "completed":
+            want = f"agents/{role}/AGENT.md"
+            for a in t.artifacts:
+                # ★ 정확히 이 역할의 파일만 집는다. endswith("AGENT.md") 로 잡으면
+                #   다른 역할의 파일을 가져와 11개가 전부 같아진다.
+                name = a.get("name", "").replace("\\", "/")
+                if name == want or name.endswith(f"/{role}/AGENT.md"):
+                    txt = a.get("text", "")
+                    if txt.lstrip().startswith("---"):
+                        parts = txt.split("---", 2)
+                        txt = parts[2] if len(parts) > 2 else txt
+                    return txt.strip()
+            return ""
+        if t.state in ("failed", "canceled"):
+            return ""
+    return ""
+
+
+TEMPLATES = Path(__file__).parent / "templates"
+
+
+def _instruction(sdef: Any) -> str:
+    """작업 지시 템플릿 (BRIEF §4.1). 없으면 빈 문자열."""
+    parts = []
+    f = TEMPLATES / f"{sdef.task}.md"
+    if f.exists():
+        parts.append(f.read_text(encoding="utf-8").strip())
+    # ★ AGENT.md 초안을 만드는 단계에는 BRIEF §4.1 의 템플릿을 반드시 붙인다
+    if sdef.emits_specs:
+        pd = TEMPLATES / "planner_draft_prompt.md"
+        if pd.exists():
+            parts.append(pd.read_text(encoding="utf-8").strip())
+    return "\n\n".join(parts)
+
+
+def _order_text(cycle_id: int) -> str:
+    """이 사이클이 처리 중인 주문서 원문. 에이전트가 지어내지 않게 하는 근거."""
+    db = SessionLocal()
+    try:
+        from .models import Order
+        c = db.get(Cycle, cycle_id)
+        if c is None:
+            return ""
+        o = db.get(Order, c.order_id)
+        if o is None:
+            return ""
+        kind = o.kind.value if hasattr(o.kind, "value") else str(o.kind)
+        return (f"고객사/서비스: {o.title}\n"
+                f"요구 종류: {kind}\n"
+                f"담당자: {o.requester or '-'}\n\n{o.body}")
+    finally:
+        db.close()
+
+
+async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
+                    out_dir: Path) -> list[str]:
+    """역할 하나에게 작업을 보내고 끝날 때까지 폴링한다."""
+    from . import a2a_client as a2a
+
+    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    req = a2a.TaskRequest(
+        role=role, cycle_id=cycle_id, step_id=sdef.id, step_name=sdef.name,
+        task=sdef.task or "work",
+        spec_url=f"{hq}/api/specs/{role}/raw",
+        context_urls=tuple(f"{hq}/api/files?path={c}" for c in sdef.inputs
+                           if c not in ("order",)),
+        outputs=tuple(o for o in sdef.outputs if "*" not in o),
+        timeout_sec=sdef.timeout_sec,
+        order=_order_text(cycle_id) if "order" in sdef.inputs else "",
+        instruction=_instruction(sdef),
+    )
+
+    db = SessionLocal()
+    try:
+        services.mirror(db, cycle_id, "hq", role, "request",
+                        f"{sdef.id} {sdef.name} 지시")
+    finally:
+        db.close()
+
+    sent = await a2a.send_message(url, req)
+    if not sent.task_id:
+        raise RuntimeError(f"{role}: taskId 를 받지 못했다")
+
+    deadline = time.time() + sdef.timeout_sec
+    while time.time() < deadline:
+        await asyncio.sleep(a2a.POLL_SEC)
+        try:
+            t = await a2a.get_task(url, sent.task_id)
+        except Exception:
+            continue                       # 노드가 잠깐 바쁠 수 있다. 계속 기다린다.
+        if t.state == "completed":
+            return _save_artifacts(cycle_id, sdef, role, t, out_dir)
+        if t.state in ("failed", "canceled"):
+            raise RuntimeError(f"{role}: {t.error or t.state}")
+
+    await a2a.cancel_task(url, sent.task_id)
+    raise RuntimeError(f"{role}: 시간 초과 ({sdef.timeout_sec}초)")
+
+
+def _save_artifacts(cycle_id: int, sdef: Any, role: str, t: Any,
+                    out_dir: Path) -> list[str]:
+    """노드가 만든 산출물을 repo/ 에 기록한다 (BRIEF §3.5 경로 규약)."""
+    saved: list[str] = []
+    role_dir = out_dir / role if len(sdef.roles) > 1 else out_dir
+    role_dir.mkdir(parents=True, exist_ok=True)
+
+    for a in t.artifacts:
+        name = str(a.get("name", "")).lstrip("/")
+        if not name or ".." in name:
+            continue
+        p = role_dir / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(a.get("text", ""), encoding="utf-8")
+        saved.append(str(p.relative_to(REPO_ROOT)))
+
+    if t.report:
+        rp = REPO_ROOT / "runs" / str(cycle_id) / sdef.id / (
+            f"report-{role}.md" if len(sdef.roles) > 1 else "report.md")
+        rp.parent.mkdir(parents=True, exist_ok=True)
+        rp.write_text(t.report, encoding="utf-8")
+
+    db = SessionLocal()
+    try:
+        services.mirror(db, cycle_id, role, "hq", "response",
+                        f"{sdef.id} 완료 — 산출물 {len(saved)}건")
+        audit(db, role, "step.artifacts", f"cycle:{cycle_id}:{sdef.id}",
+              {"count": len(saved)})
+        db.commit()
+    finally:
+        db.close()
+    return saved
+
+
+def _harvest_spec_bodies(out_dir: Path) -> dict[str, str]:
+    """기획이 만든 agents/<role>/AGENT.md 를 산출물에서 걷어낸다."""
+    bodies: dict[str, str] = {}
+    for role in ROLES:
+        for cand in (out_dir / "agents" / role / "AGENT.md",
+                     out_dir / f"{role}.md",
+                     out_dir / "planner" / "agents" / role / "AGENT.md"):
+            if cand.exists():
+                txt = cand.read_text(encoding="utf-8", errors="replace")
+                # 어댑터가 붙였을 수 있는 front-matter 는 떼고 본문만 쓴다
+                if txt.lstrip().startswith("---"):
+                    parts = txt.split("---", 2)
+                    txt = parts[2] if len(parts) > 2 else txt
+                bodies[role] = txt.strip()
+                break
+    return bodies
 
 
 def _draft_body(role: str) -> str:

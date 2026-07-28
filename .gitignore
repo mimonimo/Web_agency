@@ -20,3 +20,4 @@ repo/agora.db
 repo/agora.db-*
 repo/hq.log
 repo/project-001/
+ops/wheels/*.whl

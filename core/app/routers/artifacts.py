@@ -21,6 +21,31 @@ from ..models import Artifact, Step
 from ..services import REPO_ROOT
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
+files_router = APIRouter(prefix="/api/files", tags=["artifacts"])
+
+
+@files_router.get("", response_class=PlainTextResponse)
+async def read_file(path: str = Query(..., description="repo/ 기준 상대 경로")):
+    """노드가 참고 자료(SRS.md, schema.sql 등)를 읽어가는 주소.
+
+    ⚠️ repo/ 밖으로는 절대 나갈 수 없다. 경로 탈출을 막는다.
+    """
+    target = (REPO_ROOT / path).resolve()
+    try:
+        target.relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, "repo/ 밖의 경로는 읽을 수 없다")
+    if not target.is_file():
+        # 확정 산출물 쪽도 한 번 더 찾아본다
+        alt = (REPO_ROOT / "project-001" / path).resolve()
+        try:
+            alt.relative_to(REPO_ROOT.resolve())
+        except ValueError:
+            raise HTTPException(400, "repo/ 밖의 경로는 읽을 수 없다")
+        if not alt.is_file():
+            raise HTTPException(404, f"그런 파일이 없다: {path}")
+        target = alt
+    return target.read_text(encoding="utf-8", errors="replace")
 
 
 @router.get("")
