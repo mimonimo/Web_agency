@@ -160,13 +160,30 @@ def read_verdict(cycle_id: int, step_key: str) -> tuple[bool, str]:
         text = p.read_text(encoding="utf-8", errors="replace")
         head = "\n".join(text.strip().splitlines()[:5])
         if "반려" in head and "통과" not in head.split("반려")[0][-20:]:
-            reason = ""
+            # ⚠️ 제목(`## 이유 및 개선 방안`)을 사유로 뽑으면 아무 정보가 없다.
+            #    제목·빈 줄·코드펜스를 건너뛰고 **알맹이 있는 줄**을 모은다.
+            picked: list[str] = []
+            in_code = False
             for line in text.splitlines():
-                t = line.strip().lstrip("-*# ").strip()
-                if t and "판정" not in t:
-                    reason = t
+                raw = line.strip()
+                if raw.startswith("```"):
+                    in_code = not in_code
+                    continue
+                if in_code or not raw:
+                    continue
+                if raw.startswith("#"):          # 마크다운 제목
+                    continue
+                t = raw.lstrip("-*0123456789. ").strip()
+                t = t.replace("**", "")
+                if not t or "판정" in t:
+                    continue
+                if len(t) < 8:                   # "이유", "1." 같은 토막
+                    continue
+                picked.append(t)
+                if len(picked) >= 3:
                     break
-            return True, (reason or "게이트가 반려했다")[:300]
+            reason = " / ".join(picked)
+            return True, (reason or "게이트가 반려했다")[:400]
         return False, ""
     return False, ""
 

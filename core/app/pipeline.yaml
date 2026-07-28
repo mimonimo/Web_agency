@@ -65,7 +65,10 @@ steps:
     name: QA 게이트
     role: qa
     type: gate
-    inputs:  [SRS.md, index.html, app.js, api-contract.yaml]
+    # 게이트는 심사할 파일을 전부 받아야 한다.
+    # 못 받으면 "확인할 수 없다" 며 반려한다 — 실제로 그랬다.
+    inputs:  [SRS.md, SCREENS.md, index.html, style.css, app.js,
+              design-tokens.json, api-contract.yaml, server.js]
     outputs: [VERDICT.md]
     on_reject: { rewind_to: S5 }
 
@@ -73,7 +76,8 @@ steps:
     name: 보안 게이트
     role: security
     type: gate
-    inputs:  [SRS.md, index.html, app.js, server.js, schema.sql]
+    inputs:  [SRS.md, index.html, style.css, app.js, server.js,
+              schema.sql, api-contract.yaml]
     outputs: [VERDICT.md]
     on_reject: { rewind_to: S5, priority: critical }
 
@@ -81,7 +85,7 @@ steps:
     name: 고객 검수(UAT)
     role: customer
     type: gate
-    inputs:  [order, SOW.md, SRS.md, index.html]
+    inputs:  [order, SOW.md, SRS.md, SCREENS.md, index.html, style.css]
     outputs: [VERDICT.md]
     on_reject: { rewind_to: S2 }    # ★ 기획으로 돌아간다
 
@@ -89,13 +93,13 @@ steps:
     name: 배포
     role: sysadmin
     task: deploy
-    inputs:  [index.html, server.js, ops/run.sh]
+    inputs:  [index.html, style.css, app.js, server.js, ops/run.sh]
     outputs: [DEPLOY-LOG.md]
 
   - id: S10
     name: 운영 관찰
     role: customer
     task: generate_feedback         # 문의·클레임을 만들어 새 Order 발행
-    inputs:  [order, index.html]
+    inputs:  [order, index.html, style.css]
     outputs: [FEEDBACK.md]
     creates_orders: true
