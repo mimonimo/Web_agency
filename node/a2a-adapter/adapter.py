@@ -172,11 +172,21 @@ def build_prompt(spec: str, params: dict, ctx: dict[str, str], outdir: Path) -> 
         parts += ["## 해야 할 일", instruction, ""]
 
     if ctx:
+        # ⚠️ 참고 자료를 통째로 붙이면 프롬프트가 26KB 를 넘어 모델이 버티지 못한다.
+        #    파일당 4000자, 전체 14000자로 자른다. 잘렸다는 사실은 명시한다.
         parts.append("## 참고 자료")
+        budget = 14000
+        per = max(1500, budget // max(1, len(ctx)))
         for name, body in ctx.items():
-            parts.append(f"### {name}")
-            parts.append(body[:20000])
+            if budget <= 0:
+                parts.append(f"### {name} (분량 제한으로 생략)")
+                continue
+            take = min(per, budget, 4000)
+            chunk = body[:take]
+            parts.append(f"### {name}" + (" (앞부분만)" if len(body) > take else ""))
+            parts.append(chunk)
             parts.append("")
+            budget -= len(chunk)
 
     parts += [
         "## 반드시 지킬 것",
