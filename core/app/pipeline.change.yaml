@@ -1,0 +1,53 @@
+# 변경 요청 파이프라인 (BRIEF §3.6 표)
+#   S1 영업(범위·비용) → S2 기획 → S5 구현 → S6~S8
+#
+# 설계(S4)를 건너뛴다 — 이미 있는 시스템을 고치는 것이므로.
+# 커스터마이징 게이트(S3)도 없다. AGENT.md 는 신규 사이클에서 이미 확정됐다.
+#
+# 세 경로가 다르다는 것 자체가 수업 내용이다 (BRIEF §3.6).
+# 픽셀 오피스에서 경로가 다르게 그려져야 한다.
+
+name: web_change
+kind: change
+
+steps:
+  - id: S1
+    name: 변경 접수·범위·비용 합의
+    role: sales
+    task: intake_change
+    inputs:  [order]
+    outputs: [CHANGE-SOW.md, QUOTE.md]
+    timeout_sec: 600
+
+  - id: S2
+    name: 변경 요구사항 반영
+    role: planner
+    task: revise_specs
+    inputs:  [order, CHANGE-SOW.md, SRS.md]
+    outputs: [SRS.md, SCREENS.md]
+    emits_specs: false         # 초안 재생성 안 함 — 학생이 고친 AGENT.md 를 유지한다
+    timeout_sec: 900
+
+  - id: S5
+    name: 구현
+    parallel: [frontend, backend, dba]
+    task: implement
+    timeout_sec: 1800
+
+  - id: S6
+    name: QA 게이트
+    role: qa
+    type: gate
+    on_reject: { rewind_to: S5 }
+
+  - id: S7
+    name: 보안 게이트
+    role: security
+    type: gate
+    on_reject: { rewind_to: S5, priority: critical }
+
+  - id: S8
+    name: 고객 검수(UAT)
+    role: customer
+    type: gate
+    on_reject: { rewind_to: S2 }

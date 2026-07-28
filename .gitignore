@@ -1,0 +1,15 @@
+# 비밀·토큰은 절대 커밋하지 않는다 (BRIEF §15-6)
+.env
+provisioning/out/
+
+# 사이클 실행 산출물 — 재생성 가능하고 reset 으로 날아간다 (BRIEF §3.5)
+repo/runs/
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 오프라인 반출용 이미지 아카이브 (수 GB)
+ops/images/*.tar

@@ -1,0 +1,83 @@
+# AGORA HQ — dgx-12 (aarch64) 위에서 돈다.
+# 이미지는 arm64 매니페스트가 있는 것만 쓴다.
+# BRIEF 인수 #36(HQ 재부팅 후 자동 기동) 때문에 전부 restart: unless-stopped.
+
+name: agora
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # core 가 "postgres 가 healthy 해진 뒤에" 뜨게 하는 근거 (인수 #1)
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [agora]
+
+  core:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    image: agora-core:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NODE_TOKEN_SECRET: ${NODE_TOKEN_SECRET}
+      PROJECT_ID: ${PROJECT_ID}
+      DEFAULT_PIPELINE: ${DEFAULT_PIPELINE}
+      DEFAULT_STEP_TIMEOUT_SEC: ${DEFAULT_STEP_TIMEOUT_SEC}
+      A2A_POLL_INTERVAL_SEC: ${A2A_POLL_INTERVAL_SEC}
+      NODE_HEARTBEAT_TIMEOUT_SEC: ${NODE_HEARTBEAT_TIMEOUT_SEC}
+      SPEC_POLL_INTERVAL_SEC: ${SPEC_POLL_INTERVAL_SEC}
+      HQ_HOST: ${HQ_HOST}
+      TZ: ${TZ}
+    volumes:
+      # 산출물 저장소. 컨테이너가 아니라 호스트에 남아야 회고 때 git log 를 띄울 수 있다.
+      - ./repo:/app/repo
+      - ./provisioning:/app/provisioning
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [agora]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [core]
+    ports:
+      - "${HQ_HTTP_PORT}:80"
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [agora]
+
+  # dnsmasq (hq.agora.lan 해석, 인수 #2) 는 Phase 1 에서 추가한다.
+  # 호스트의 systemd-resolved 가 53 번을 이미 잡고 있어 포트 처리를 따로 정해야 한다.
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  agora:
+    driver: bridge

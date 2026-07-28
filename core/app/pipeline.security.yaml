@@ -1,0 +1,38 @@
+# 보안 파이프라인 (BRIEF §3.6 표)
+#   S1(접수만) → S7 보안 최우선 → S5 수정 → S7 재점검
+#
+# 보안 건은 QA 게이트보다 먼저 간다. 우선순위가 다르다는 것을 학생이 보게 하는 게 목적이다.
+
+name: web_security
+kind: security
+
+steps:
+  - id: S1
+    name: 보안 이슈 접수
+    role: sales
+    task: intake_only
+    inputs:  [order]
+    outputs: [SECURITY-ISSUE.md]
+    timeout_sec: 300
+
+  - id: S7
+    name: 보안 점검 (최우선)
+    role: security
+    task: assess
+    priority: critical
+    inputs:  [SECURITY-ISSUE.md]
+    outputs: [THREAT.md]
+    timeout_sec: 900
+
+  - id: S5
+    name: 수정
+    parallel: [backend, dba, sysadmin]
+    task: fix
+    inputs:  [THREAT.md]
+    timeout_sec: 1800
+
+  - id: S7R
+    name: 보안 재점검
+    role: security
+    type: gate
+    on_reject: { rewind_to: S5, priority: critical }

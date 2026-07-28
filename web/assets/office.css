@@ -1,0 +1,31 @@
+/* AGORA 픽셀 오피스 스타일.
+   CDN 없음 — 폰트도 시스템 폰트만 쓴다 (BRIEF §8, 인수 #32).
+   Phase 4 에서 도트 스프라이트를 CSS/SVG 로 직접 그린다. */
+
+:root {
+  --bg: #10131a;
+  --fg: #e8eaf0;
+  --dim: #8b93a7;
+  --accent: #6ee7b7;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, "Noto Sans KR", sans-serif;
+  /* 픽셀 느낌을 위해 이미지 보간을 끈다 */
+  image-rendering: pixelated;
+}
+
+.placeholder { text-align: center; padding: 2rem; }
+.placeholder h1 { margin: 0 0 .5rem; letter-spacing: .1em; }
+.placeholder .phase { color: var(--dim); }
+.placeholder ul { list-style: none; padding: 0; margin-top: 1.5rem; }
+.placeholder li { margin: .4rem 0; }
+.placeholder a { color: var(--accent); }

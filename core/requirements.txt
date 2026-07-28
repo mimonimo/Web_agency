@@ -1,0 +1,11 @@
+# 버전 고정 — 교실에는 인터넷이 없다. 이미지를 미리 빌드해 둔다 (make preload).
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.14.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+pyyaml==6.0.2
+python-multipart==0.0.20
