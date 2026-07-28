@@ -40,12 +40,20 @@ case "${1:-start}" in
     rm -f "$PIDF"
     ;;
   restart) "$0" stop; sleep 1; "$0" start ;;
+  # artifacts-guard: 산출물이 얼마나 쌓여 있는지 알려준다
+  sites)
+    find repo/runs -name index.html -not -path "*/node_modules/*" 2>/dev/null \
+      | sed "s|repo/|  http://220.67.5.62:${PORT}/preview/|"
+    ;;
   status)
     if running; then
       echo "돌고 있다 (pid $(cat "$PIDF"))"
       curl -s "http://127.0.0.1:$PORT/api/health"; echo
+      n=$(find repo/runs -type f 2>/dev/null | wc -l)
+      s=$(find repo/runs -name index.html -not -path "*/node_modules/*" 2>/dev/null | wc -l)
+      echo "산출물 ${n}개 · 완성된 사이트 ${s}개"
     else echo "안 돌고 있다"; fi
     ;;
   log) tail -f "$LOG" ;;
-  *) echo "사용법: ops/dev.sh start|stop|restart|status|log" >&2; exit 2 ;;
+  *) echo "사용법: ops/dev.sh start|stop|restart|status|log|sites" >&2; exit 2 ;;
 esac

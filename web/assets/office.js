@@ -109,6 +109,11 @@ async function drawSites() {
   try {
     const { body } = await api("/preview/sites");
     const list = (body && body.data) || [];
+    const top = $("site-top");
+    if (top) {
+      if (list.length) { top.hidden = false; top.href = list[0].url; }
+      else top.hidden = true;
+    }
     el.innerHTML = `<div class="hd">완성된 사이트</div>` + (list.length
       ? list.slice(0, 4).map(s =>
           `<a href="${s.url}" target="_blank" rel="noopener">🌐 ${s.role || s.step || "site"}

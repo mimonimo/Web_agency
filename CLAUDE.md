@@ -355,3 +355,47 @@ QA·보안·검수 에이전트가 쓴 `VERDICT.md` 의 첫 줄(`판정: 통과|
 ops/acceptance.sh   통과 83 · 실패 0
 ops/rehearsal.sh    실제 노드 10/10 단계 DONE (24분)
 ```
+
+
+---
+
+## 산출물 복구와 사이트 미리보기 (2026-07-28)
+
+### 사고와 복구
+
+인수 테스트를 돌리려고 `rm -rf repo/runs` 를 했는데, **거기 리허설 결과물이 들어 있었다.**
+프론트엔드가 만든 「밀밭제과 예약 주문」 사이트가 통째로 날아갔다.
+
+**노드에는 원본이 남아 있었다.** 어댑터는 `~/agora/workspace/cycle-<id>/<step>/output/`
+에 쓰고 그것을 HQ 로 올려보낼 뿐, 자기 사본은 지우지 않는다.
+`~/agora-ops/recover-artifacts.sh <cycle>` 로 10대에서 51개를 전부 회수했다.
+
+복구 스크립트를 만들면서 겪은 것 — **`while read` 루프 안의 `ssh` 는 `-n` 이 필요하다.**
+안 그러면 ssh 가 루프의 stdin(`nodes.tsv`)을 통째로 먹어서 첫 노드 뒤로 전부 건너뛴다.
+목록은 별도 fd(`3<`)로 읽게 했다.
+
+### 다시 안 나게 한 것
+
+- `ops/acceptance.sh` 는 **`repo/runs` 를 절대 지우지 않는다.** 주석으로 못 박았다.
+  처음부터 다시 하려면 `ops/reset.sh` — 거기엔 `repo/.archive/` 백업이 있다.
+- `ops/dev.sh status` 가 산출물 개수와 완성된 사이트 개수를 같이 보여준다.
+- `ops/dev.sh sites` 로 사이트 주소만 뽑아 볼 수 있다.
+
+### 완성된 사이트 미리보기
+
+`GET /preview/{path}` — repo/ 안의 파일을 올바른 MIME 으로 서빙한다. 읽기 전용이고
+repo/ 밖으로는 못 나간다(경로 탈출 테스트 포함).
+`GET /preview/sites` 가 `index.html` 이 있는 디렉터리를 전부 찾아 목록으로 준다.
+DB 를 보지 않고 파일시스템만 훑으므로 **DB 가 초기화돼도 사이트는 계속 보인다.**
+
+화면 세 군데에 붙였다 — 픽셀 오피스 상단 바 버튼, 서버실 패널 목록, 파일 탐색기의 `열기`.
+
+검증: `core/tests/test_preview.py` 10건 (렌더링·CSS/JS 로드·주문 내용 반영·경로 탈출 차단).
+
+### 최종 인수
+
+```
+ops/acceptance.sh   통과 84 · 실패 0   (EXECUTOR=a2a 기준)
+```
+E2E·편집 테스트는 `sim` 에서만 돈다 — 실제 노드는 한 단계에 수십 초라 대기시간을 넘긴다.
+`acceptance.sh` 가 그 사실을 출력하고 건너뛴다.

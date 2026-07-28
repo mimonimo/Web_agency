@@ -234,3 +234,11 @@ dialog button.primary:hover{background:#7cb4fb}
 .sites a:hover{background:#183a26}
 .sites a .sub{margin-left:auto;font-size:.82rem;color:#7fbf95;font-weight:400}
 .sites .none{color:var(--dim);font-size:.92rem}
+
+/* 완성된 사이트 바로가기 — 상단 바에서 가장 먼저 보인다 */
+.site-top{
+  background:#153d22;color:#86efac;border:1.5px solid var(--ok);border-radius:10px;
+  padding:.5rem 1rem;font-weight:800;font-size:1rem;text-decoration:none;
+  transition:background .12s;
+}
+.site-top:hover{background:#1d5230}

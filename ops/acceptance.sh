@@ -7,6 +7,11 @@
 #            ./ops/acceptance.sh              # 구현된 Phase 전부
 #
 # 읽기 전용이다. 아무것도 고치지 않으므로 몇 번을 돌려도 같은 결과가 나온다.
+#
+# ⚠️ 산출물 보호 — 이 스크립트는 repo/runs 를 절대 지우지 않는다.
+#    E2E·편집 테스트는 돌고 있는 HQ 에 주문을 하나 더 넣을 뿐이다.
+#    실제로 한 번 리허설 결과물을 날린 적이 있다. 다시는 지우지 마라.
+#    처음부터 다시 하려면 ops/reset.sh 를 써라 — 거기엔 백업이 있다.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -270,6 +275,23 @@ import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0
     || ng "학생 편집 API 응답이 이상하다 ($code)"
   grep -q "PUT" web/edit.html && ok "편집 페이지가 저장 요청을 보낸다" \
     || ng "편집 페이지에 저장 기능이 없다"
+
+  for f in /agent.html /files.html; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$HQ$f")
+    [ "$code" = "200" ] && ok "$f 200" || ng "$f → $code"
+  done
+
+  # ★ 에이전트가 만든 웹사이트를 브라우저에서 그대로 열 수 있는가
+  if "$PY_BIN" core/tests/test_preview.py >/tmp/agora-preview.log 2>&1; then
+    ok "★ 완성된 사이트 미리보기 $(grep -c '✅' /tmp/agora-preview.log)건 통과"
+  else
+    if grep -q "사이트를 최소 1개" /tmp/agora-preview.log && \
+       ! find repo/runs -name index.html -not -path "*/node_modules/*" 2>/dev/null | grep -q .; then
+      printf '  ⏭  완성된 사이트가 아직 없다 (실제 노드로 사이클을 돌려야 생긴다)\n'
+    else
+      ng "완성된 사이트 미리보기 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-preview.log
+    fi
+  fi
 }
 
 phase2() {
