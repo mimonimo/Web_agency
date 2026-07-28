@@ -5,15 +5,117 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AGORA Web — 주문 접수</title>
 <link rel="stylesheet" href="/assets/office.css">
+<style>
+  .form{max-width:640px;margin:2rem auto;padding:1.4rem;background:var(--panel);
+        border:1px solid var(--line);border-radius:10px}
+  .form h1{margin:0 0 .3rem;font-size:1.3rem}
+  .form .sub{color:var(--dim);font-size:.85rem;margin:0 0 1.2rem}
+  .f{margin-bottom:.9rem}
+  .f label{display:block;font-size:.82rem;margin-bottom:.25rem}
+  .f label .req{color:#f87171;margin-left:.2em}
+  .f input,.f select,.f textarea{
+    width:100%;background:#111621;color:var(--fg);border:1px solid var(--line);
+    border-radius:5px;padding:.5rem;font-family:inherit;font-size:.9rem}
+  .feat{display:flex;flex-wrap:wrap;gap:.4rem}
+  .feat label{border:1px solid var(--line);border-radius:5px;padding:.35rem .6rem;
+              font-size:.82rem;cursor:pointer;display:flex;align-items:center;gap:.3rem}
+  .feat label:has(input:checked){border-color:var(--run);background:#1b2740}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+  .submit{width:100%;background:var(--run);color:#0d1017;font-weight:700;border:0;
+          border-radius:6px;padding:.7rem;font-size:.95rem;cursor:pointer;font-family:inherit}
+  .result{margin-top:1rem;padding:.8rem;border-radius:6px;font-size:.86rem;display:none}
+  .result.ok{background:#16351f;color:var(--ok);display:block}
+  .result.err{background:#2a1414;color:var(--bad);display:block}
+</style>
 </head>
 <body>
-  <!-- Phase 4 에서 구현한다 (BRIEF §9).
-       정적 HTML + POST /api/orders.
-       필수: 회사/서비스 이름, 업종, 목적, 필요 기능, 납기 희망일, 담당자 이름·연락처 -->
-  <main class="placeholder">
-    <h1>주문 접수</h1>
-    <p class="phase">주문 사이트는 <strong>Phase 4</strong> 에서 만듭니다.</p>
-    <p>그때까지는 강사가 <code>POST /api/orders</code> 로 직접 넣습니다 (BRIEF §14).</p>
-  </main>
+<header class="bar">
+  <div class="brand">AGORA<span>Web</span></div>
+  <div class="cycleinfo"><a class="link" href="/index.html">← 픽셀 오피스</a></div>
+</header>
+
+<form class="form" id="f">
+  <h1>웹사이트 제작 의뢰</h1>
+  <p class="sub">접수하면 영업(sales) 에이전트가 바로 검토를 시작합니다.</p>
+
+  <div class="row">
+    <div class="f"><label>회사 / 서비스 이름<span class="req">*</span></label>
+      <input name="company" required placeholder="밀밭제과"></div>
+    <div class="f"><label>업종<span class="req">*</span></label>
+      <input name="industry" required placeholder="제과 / 베이커리"></div>
+  </div>
+
+  <div class="f"><label>목적 (한 문장)<span class="req">*</span></label>
+    <input name="purpose" required placeholder="동네 단골이 온라인으로 주문할 수 있게 한다"></div>
+
+  <div class="f"><label>필요 기능<span class="req">*</span></label>
+    <div class="feat" id="feat"></div></div>
+
+  <div class="row">
+    <div class="f"><label>납기 희망일<span class="req">*</span></label>
+      <input type="date" name="due_date" required></div>
+    <div class="f"><label>요구 종류</label>
+      <select name="kind">
+        <option value="new">신규 개발</option>
+        <option value="change">변경 요청</option>
+        <option value="defect">결함 신고</option>
+        <option value="security">보안 이슈</option>
+      </select></div>
+  </div>
+
+  <div class="f"><label>참고 사이트 / 톤&amp;매너</label>
+    <input name="reference" placeholder="따뜻하고 아날로그한 느낌"></div>
+
+  <div class="row">
+    <div class="f"><label>담당자 이름<span class="req">*</span></label>
+      <input name="contact_name" required></div>
+    <div class="f"><label>연락처<span class="req">*</span></label>
+      <input name="contact" required placeholder="010-0000-0000"></div>
+  </div>
+
+  <div class="f"><label>예산 (가상 크레딧)</label>
+    <input type="number" name="budget" placeholder="1000"></div>
+
+  <button class="submit" type="submit">주문 접수</button>
+  <div class="result" id="res"></div>
+</form>
+
+<script>
+const FEATURES = ["로그인","게시판","상품목록","장바구니","결제(모의)","문의폼","관리자","검색"];
+document.getElementById("feat").innerHTML = FEATURES.map(f =>
+  `<label><input type="checkbox" name="features" value="${f}">${f}</label>`).join("");
+
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const features = fd.getAll("features");
+  if (!features.length) { show("err", "필요 기능을 하나 이상 선택해 주세요."); return; }
+  const body = {
+    company: fd.get("company"), industry: fd.get("industry"),
+    purpose: fd.get("purpose"), features,
+    due_date: fd.get("due_date"), kind: fd.get("kind"),
+    reference: fd.get("reference") || null,
+    contact_name: fd.get("contact_name"), contact: fd.get("contact"),
+    budget: fd.get("budget") ? Number(fd.get("budget")) : null,
+  };
+  try {
+    const r = await fetch("/api/orders", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) { show("err", j.error || j.detail || "접수에 실패했습니다."); return; }
+    show("ok", `접수 완료 — 주문 #${j.data.order_id}, 사이클 #${j.data.cycle.id} 이 시작됩니다. ` +
+               `픽셀 오피스에서 진행 상황을 볼 수 있습니다.`);
+    e.target.reset();
+  } catch (err) { show("err", "서버에 연결할 수 없습니다."); }
+});
+
+function show(kind, msg) {
+  const el = document.getElementById("res");
+  el.className = "result " + kind;
+  el.textContent = msg;
+}
+</script>
 </body>
 </html>

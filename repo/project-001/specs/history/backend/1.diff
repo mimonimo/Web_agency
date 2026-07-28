@@ -1,0 +1,9 @@
+--- /home/dgx-12/agora/repo/project-001/.drafts/backend/AGENT.md	2026-07-28 12:32:36.956506573 +0000
++++ /home/dgx-12/agora/repo/project-001/agents/backend/AGENT.md	2026-07-28 12:32:37.351977467 +0000
+@@ -29,3 +29,6 @@
+ 
+ <!-- ↑ 여기까지가 기획이 만든 초안이다.
+      학생은 자기 전문 지식을 더해 이 파일을 고치고 커밋한다. -->
++
++## 학생이 추가한 규칙
++- 모든 응답은 {ok, data|error} 형식을 지킨다

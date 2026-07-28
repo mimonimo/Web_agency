@@ -143,14 +143,98 @@ PY
 
 not_yet() { head_ "$1"; printf '  ⏭  아직 구현하지 않았다\n'; }
 
+HQ="${HQ:-http://127.0.0.1:8000}"
+PY_BIN="$ROOT/.venv/bin/python"
+
+phase3() {
+  head_ "Phase 3 — 오케스트레이터 (인수 11–25)"
+  if [ ! -x "$PY_BIN" ]; then ng "venv 가 없다 (python3 -m venv .venv)"; return; fi
+
+  if "$PY_BIN" core/tests/test_orchestrator.py >/tmp/agora-orch.log 2>&1; then
+    ok "상태기계 단위 테스트 $(grep -c '✅' /tmp/agora-orch.log)건 통과"
+  else
+    ng "상태기계 단위 테스트 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-orch.log
+  fi
+
+  if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then
+    ng "HQ 가 떠 있지 않다 (make dev 로 먼저 띄워라)"; return
+  fi
+  ok "HQ 가 응답한다 ($HQ/api/health)"
+
+  if "$PY_BIN" core/tests/test_flow.py "$HQ" >/tmp/agora-flow.log 2>&1; then
+    ok "E2E 흐름 테스트 $(grep -c '✅' /tmp/agora-flow.log)건 통과"
+  else
+    ng "E2E 흐름 테스트 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-flow.log
+  fi
+}
+
+phase4() {
+  head_ "Phase 4 — PM 관제 화면 (인수 26–32)"
+  if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then
+    ng "HQ 가 떠 있지 않다"; return
+  fi
+
+  for f in /index.html /order.html /board.html /assets/office.css /assets/office.js; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$HQ$f")
+    [ "$code" = "200" ] && ok "$f 200" || ng "$f → $code"
+  done
+
+  # 인수 #32 — 빌드·CDN 없음. 외부 호스트를 참조하면 안 된다.
+  if grep -rIEl 'https?://(?!127|localhost|220\.67)' web/ 2>/dev/null | grep -q .; then
+    ng "web/ 이 외부 URL 을 참조한다 (CDN 금지)"
+  elif grep -rIEo 'src="https?://[^"]*"|href="https?://[^"]*"' web/ 2>/dev/null | grep -q .; then
+    ng "web/ 이 외부 리소스를 불러온다"
+  else
+    ok "web/ 에 외부 CDN·원격 리소스 참조가 없다 (인수 #32)"
+  fi
+
+  # 대시보드가 한 번에 다 주는가 (BRIEF §7)
+  if curl -sf "$HQ/api/dashboard" | "$PY_BIN" -c "
+import json,sys
+d = json.load(sys.stdin)['data']
+need = ['cycle','steps','nodes','specs','messages','tickets','orders']
+missing = [k for k in need if k not in d]
+sys.exit(1 if missing else 0)"; then
+    ok "/api/dashboard 가 cycle·steps·nodes·specs·messages·tickets·orders 를 한 번에 준다"
+  else
+    ng "/api/dashboard 응답에 빠진 키가 있다"
+  fi
+
+  # 노드 11개 · 하트비트 (인수 #5·#7·#27)
+  n_up=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
+import json,sys; d=json.load(sys.stdin)['data']
+print(sum(1 for x in d if x['status']=='up'))" 2>/dev/null || echo 0)
+  n_all=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
+import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0)
+  [ "$n_all" = "11" ] && ok "노드 11개가 등록돼 있다 (인수 #5)" || ng "노드 $n_all 개"
+  [ "$n_up" -ge 10 ] && ok "노드 $n_up/11 이 하트비트로 살아 있다 (인수 #7)" \
+                     || ng "살아 있는 노드가 $n_up 개뿐이다"
+
+  # reset 대화상자 문구 (인수 #31)
+  if grep -q "AGENT.md 는 그대로 두기" web/index.html \
+     && grep -q 'value="true" checked' web/index.html; then
+    ok "★ ⟲ 처음부터 대화상자가 있고 기본값이 'AGENT.md 유지' 다 (인수 #31)"
+  else
+    ng "reset 대화상자 문구·기본값이 BRIEF §8.3 과 다르다"
+  fi
+
+  grep -q "rewound" web/assets/office.js && grep -q "tl-arrow.rewound" web/assets/office.css \
+    && ok "★ 되감기 역방향 화살표가 구현돼 있다 (인수 #29)" \
+    || ng "되감기 화살표가 없다"
+  grep -q "spec-counter" web/assets/office.js \
+    && ok "커스터마이징 게이트 카운터(7/11)가 구현돼 있다 (인수 #30)" \
+    || ng "스펙 카운터가 없다"
+}
+
 case "$PHASE" in
   0)   phase0 ;;
+  3)   phase3 ;;
+  4)   phase4 ;;
   all) phase0
-       not_yet "Phase 1 — 기반 (인수 1–4)"
-       not_yet "Phase 2 — 노드 · A2A (인수 5–10)"
-       not_yet "Phase 3 — 오케스트레이터 (인수 11–25)"
-       not_yet "Phase 4 — 픽셀 오피스 (인수 26–32)"
-       not_yet "Phase 5 — 전체 (인수 33–36)" ;;
+       phase3
+       phase4
+       not_yet "Phase 2 — 노드 A2A 어댑터 (인수 8–10)"
+       not_yet "Phase 5 — 노드 부트스트랩 (인수 33–36)" ;;
   *)   echo "아직 없는 Phase: $PHASE" >&2; exit 2 ;;
 esac
 

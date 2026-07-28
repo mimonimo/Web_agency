@@ -6,7 +6,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help up down restart logs ps reset provision seed preload acceptance env check
+.PHONY: help dev dev-stop dev-log demo test up down restart logs ps reset provision seed preload acceptance env check
 
 help:  ## 이 도움말
 	@echo "AGORA HQ — 사용 가능한 명령"
@@ -14,7 +14,24 @@ help:  ## 이 도움말
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "먼저 할 일: sudo usermod -aG docker \$$USER  후 재로그인"
+	@echo "지금 바로:  make dev   → http://220.67.5.62:8000/"
+	@echo "컨테이너로 가려면: sudo usermod -aG docker \$$USER 후 재로그인 → make up"
+
+dev: env  ## ★ 네이티브로 HQ 기동 (docker 권한 없이 — venv + SQLite)
+	@./ops/dev.sh start
+
+dev-stop:  ## 네이티브 HQ 정지
+	@./ops/dev.sh stop
+
+dev-log:  ## 네이티브 HQ 로그
+	@./ops/dev.sh log
+
+demo:  ## ★ 수업 시연 시나리오 (PM 화면 띄워 놓고 실행)
+	@./ops/demo.sh
+
+test:  ## 상태기계 단위 테스트 + E2E 흐름 테스트
+	@./.venv/bin/python core/tests/test_orchestrator.py
+	@./.venv/bin/python core/tests/test_flow.py
 
 env: .env  ## .env 가 없으면 .env.example 에서 만든다
 .env:

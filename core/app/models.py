@@ -24,6 +24,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
+# SQLite 는 BIGINT PK 를 자동증가시키지 않는다 (rowid 별칭이 INTEGER 뿐).
+# Postgres 에서는 BIGINT, SQLite 에서는 INTEGER 로 내려가게 한다.
+BigIntPK = BigInteger().with_variant(Integer, "sqlite")
+
+
 # ── 역할 11개. 이 문자열이 노드 ID 이자 A2A 에이전트 이름이자 ────────────
 #    agents/<role>/AGENT.md 경로다. 어디서든 같은 문자열을 쓴다 (BRIEF §1.3).
 ROLES: tuple[str, ...] = (
@@ -218,7 +223,7 @@ class Message(Base):
 
     __tablename__ = "messages"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True)
     cycle_id: Mapped[int | None] = mapped_column(ForeignKey("cycles.id"), index=True)
     step_id: Mapped[int | None] = mapped_column(ForeignKey("steps.id"))
     from_role: Mapped[str] = mapped_column(String(32))
@@ -260,7 +265,7 @@ class Artifact(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True)
     actor: Mapped[str] = mapped_column(String(64))
     action: Mapped[str] = mapped_column(String(64))
     target: Mapped[str | None] = mapped_column(String(256))
