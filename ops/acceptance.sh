@@ -281,6 +281,17 @@ import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0
     [ "$code" = "200" ] && ok "$f 200" || ng "$f → $code"
   done
 
+  # 결과물 품질 점수 (templates/_quality.md 기준)
+  if find repo/runs -name index.html -not -path "*/node_modules/*" 2>/dev/null | grep -q .; then
+    score=$("$PY_BIN" ops/site-check.py 2>/dev/null | grep -oP '품질 점수: \K[0-9]+/[0-9]+')
+    pct=$("$PY_BIN" ops/site-check.py 2>/dev/null | grep -oP '\(\K[0-9]+(?=점\))')
+    if [ -n "$pct" ] && [ "$pct" -ge 75 ]; then
+      ok "완성된 사이트 품질 $score (${pct}점)"
+    else
+      ng "완성된 사이트 품질 미달 $score (${pct:-?}점) — ops/site-check.py 로 항목 확인"
+    fi
+  fi
+
   # ★ 에이전트가 만든 웹사이트를 브라우저에서 그대로 열 수 있는가
   if "$PY_BIN" core/tests/test_preview.py >/tmp/agora-preview.log 2>&1; then
     ok "★ 완성된 사이트 미리보기 $(grep -c '✅' /tmp/agora-preview.log)건 통과"
