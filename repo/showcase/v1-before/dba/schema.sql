@@ -1,0 +1,56 @@
+-- Schema for AGORA Web
+CREATE TABLE users (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    password_hash CHAR(60) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE products (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    image_url VARCHAR(255),
+    price DECIMAL(10,2) NOT NULL,
+    category VARCHAR(20) NOT NULL CHECK (category IN ('빵','케이크','디저트')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE carts (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE cart_items (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    cart_id BIGINT UNSIGNED NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+    product_id BIGINT UNSIGNED NOT NULL REFERENCES products(id),
+    quantity INT UNSIGNED NOT NULL DEFAULT 1,
+    UNIQUE(cart_id, product_id)
+);
+CREATE TABLE orders (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL REFERENCES users(id),
+    total_amount DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT '주문접수' CHECK (status IN ('주문접수','결제완료','배송중','완료')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE order_items (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    order_id BIGINT UNSIGNED NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id BIGINT UNSIGNED NOT NULL REFERENCES products(id),
+    quantity INT UNSIGNED NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL
+);
+CREATE TABLE inquiries (
+    id BIGINT UNSIGNED PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(100) NOT NULL,
+    contact VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+-- Indexes
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_products_category ON products(category);
+CREATE INDEX idx_cart_items_cart_product ON cart_items(cart_id, product_id);

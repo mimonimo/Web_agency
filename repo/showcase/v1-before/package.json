@@ -1,0 +1,12 @@
+{
+  "name": "milbam-reservation",
+  "version": "1.0.0",
+  "description": "밀밭제과 예약 주문 프론트엔드와 간단한 백엔드 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

@@ -41,6 +41,7 @@ fi
 
 echo "[3] HQ 데이터 삭제"
 rm -f  repo/agora.db repo/agora.db-shm repo/agora.db-wal repo/hq.log "$ROOT/.hq.pid"
+# showcase 는 비교·시연용으로 남긴 것이라 지우지 않는다
 rm -rf repo/runs repo/project-001
 mkdir -p repo
 
