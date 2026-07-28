@@ -6,26 +6,36 @@
 <title>AGORA Web — 주문 접수</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .form{max-width:640px;margin:2rem auto;padding:1.4rem;background:var(--panel);
-        border:1px solid var(--line);border-radius:10px}
-  .form h1{margin:0 0 .3rem;font-size:1.3rem}
-  .form .sub{color:var(--dim);font-size:.85rem;margin:0 0 1.2rem}
-  .f{margin-bottom:.9rem}
-  .f label{display:block;font-size:.82rem;margin-bottom:.25rem}
-  .f label .req{color:#f87171;margin-left:.2em}
+  .form{max-width:720px;margin:2rem auto;padding:1.8rem;background:var(--panel);
+        border:1px solid var(--line);border-radius:14px}
+  .form h1{margin:0 0 .4rem;font-size:1.5rem}
+  .form .sub{color:var(--dim);font-size:1rem;margin:0 0 1.6rem;line-height:1.6}
+  .f{margin-bottom:1.15rem}
+  .f label{display:block;font-size:.95rem;font-weight:600;margin-bottom:.4rem}
+  .f label .req{color:#f87171;margin-left:.25em}
   .f input,.f select,.f textarea{
-    width:100%;background:#111621;color:var(--fg);border:1px solid var(--line);
-    border-radius:5px;padding:.5rem;font-family:inherit;font-size:.9rem}
-  .feat{display:flex;flex-wrap:wrap;gap:.4rem}
-  .feat label{border:1px solid var(--line);border-radius:5px;padding:.35rem .6rem;
-              font-size:.82rem;cursor:pointer;display:flex;align-items:center;gap:.3rem}
+    width:100%;background:#0f131b;color:var(--fg);border:1.5px solid var(--line);
+    border-radius:10px;padding:.7rem .85rem;font-family:inherit;font-size:1rem}
+  .f input:focus,.f select:focus{outline:none;border-color:var(--run);
+    box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  .feat{display:flex;flex-wrap:wrap;gap:.55rem}
+  .feat label{border:1.5px solid var(--line);border-radius:10px;padding:.55rem .9rem;
+              font-size:1rem;font-weight:600;cursor:pointer;display:flex;
+              align-items:center;gap:.45rem;background:#121824;transition:background .12s}
+  .feat label:hover{background:#222c3c}
   .feat label:has(input:checked){border-color:var(--run);background:#1b2740}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
-  .submit{width:100%;background:var(--run);color:#0d1017;font-weight:700;border:0;
-          border-radius:6px;padding:.7rem;font-size:.95rem;cursor:pointer;font-family:inherit}
-  .result{margin-top:1rem;padding:.8rem;border-radius:6px;font-size:.86rem;display:none}
-  .result.ok{background:#16351f;color:var(--ok);display:block}
-  .result.err{background:#2a1414;color:var(--bad);display:block}
+  .feat input{width:1.15rem;height:1.15rem;accent-color:var(--run)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+  @media (max-width:640px){ .row{grid-template-columns:1fr} }
+  .submit{width:100%;background:var(--run);color:#0d1017;font-weight:800;border:0;
+          border-radius:12px;padding:.95rem;font-size:1.1rem;cursor:pointer;
+          font-family:inherit;margin-top:.5rem;transition:background .12s,transform .06s}
+  .submit:hover{background:#7cb4fb}
+  .submit:active{transform:translateY(1px)}
+  .result{margin-top:1.2rem;padding:1rem 1.1rem;border-radius:10px;font-size:1rem;
+          display:none;line-height:1.6;font-weight:600}
+  .result.ok{background:#153d22;color:#86efac;display:block}
+  .result.err{background:#341a1a;color:#fecaca;display:block}
 </style>
 </head>
 <body>

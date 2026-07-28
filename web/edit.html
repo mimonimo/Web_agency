@@ -6,31 +6,41 @@
 <title>AGENT.md 편집 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .wrap{max-width:900px;margin:1.2rem auto;padding:0 1rem}
-  .pick{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:1rem}
-  .pick a{border:1px solid var(--line);border-radius:5px;padding:.35rem .6rem;
-          font-size:.82rem;text-decoration:none;color:var(--fg);background:#111621}
-  .pick a.on{border-color:var(--run);background:#1b2740;font-weight:700}
-  .pick a .st{font-size:.68rem;margin-left:.3rem}
-  .pick a .st.customized{color:var(--ok)} .pick a .st.draft{color:var(--wait)}
-  .head{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.5rem;flex-wrap:wrap}
-  .head h1{margin:0;font-size:1.15rem}
-  .head .path{color:var(--dim);font-size:.75rem;font-family:ui-monospace,monospace}
-  textarea{width:100%;height:56vh;background:#0f131b;color:var(--fg);
-           border:1px solid var(--line);border-radius:8px;padding:.9rem;
-           font-family:ui-monospace,"D2Coding",monospace;font-size:.86rem;line-height:1.55;
-           resize:vertical}
-  .bar2{display:flex;align-items:center;gap:.6rem;margin-top:.7rem;flex-wrap:wrap}
-  .bar2 button{background:var(--run);color:#0d1017;border:0;border-radius:6px;
-               padding:.6rem 1.3rem;font-weight:700;cursor:pointer;font-family:inherit;
-               font-size:.92rem}
-  .bar2 button.ghost{background:#1e2635;color:var(--fg);border:1px solid var(--line);font-weight:400}
-  .msg{font-size:.84rem}
-  .msg.ok{color:var(--ok)} .msg.err{color:var(--bad)} .msg.dim{color:var(--dim)}
-  .hint{background:#151a24;border:1px solid var(--line);border-radius:8px;
-        padding:.7rem .9rem;font-size:.8rem;color:var(--dim);margin-bottom:.9rem}
+  .wrap{max-width:1000px;margin:1.4rem auto;padding:0 1.2rem}
+  .pick{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem}
+  .pick a{border:1.5px solid var(--line);border-radius:10px;padding:.55rem .9rem;
+          font-size:1rem;font-weight:600;text-decoration:none;color:var(--fg);
+          background:#121824;display:inline-flex;align-items:center;gap:.4rem;
+          transition:background .12s,border-color .12s}
+  .pick a:hover{background:#222c3c}
+  .pick a.on{border-color:var(--run);background:#1b2740;box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  .pick a .en{font-size:.8rem;color:var(--dim);font-family:ui-monospace,monospace}
+  .pick a .st{font-size:1rem}
+  .head{display:flex;align-items:baseline;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap}
+  .head h1{margin:0;font-size:1.35rem}
+  .head .path{color:var(--dim);font-size:.85rem;font-family:ui-monospace,monospace}
+  textarea{width:100%;height:58vh;background:#0f131b;color:var(--fg);
+           border:1.5px solid var(--line);border-radius:10px;padding:1.1rem;
+           font-family:ui-monospace,"D2Coding","Noto Sans Mono CJK KR",monospace;
+           font-size:1.05rem;line-height:1.75;resize:vertical;tab-size:2}
+  textarea:focus{outline:none;border-color:var(--run);box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  .bar2{display:flex;align-items:center;gap:.7rem;margin-top:.9rem;flex-wrap:wrap}
+  .bar2 button{background:var(--run);color:#0d1017;border:0;border-radius:10px;
+               padding:.75rem 1.8rem;font-weight:800;cursor:pointer;font-family:inherit;
+               font-size:1.05rem;transition:background .12s,transform .06s}
+  .bar2 button:hover{background:#7cb4fb}
+  .bar2 button:active{transform:translateY(1px)}
+  .bar2 button.ghost{background:var(--panel2);color:var(--fg);
+                     border:1.5px solid var(--line);font-weight:600}
+  .bar2 button.ghost:hover{background:#2c384c}
+  .msg{font-size:1rem;font-weight:600}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--bad)} .msg.dim{color:var(--dim);font-weight:400}
+  .hint{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--run);
+        border-radius:0 10px 10px 0;padding:1rem 1.2rem;font-size:1rem;color:var(--dim);
+        margin-bottom:1.2rem;line-height:1.7}
   .hint b{color:var(--fg)}
-  .counter{margin-left:auto;font-size:.85rem}
+  .counter{margin-left:auto;font-size:1.05rem;font-weight:800;
+           padding:.3rem .8rem;border-radius:999px;background:#4d3a10;color:#fcd34d}
 </style>
 </head>
 <body>
@@ -87,14 +97,16 @@ async function drawPicker() {
     if (d.total) {
       cnt = `AGENT.md ${d.customized} / ${d.total}`;
       $("cnt").textContent = cnt;
-      $("cnt").style.color = d.customized >= d.total ? "var(--ok)" : "var(--wait)";
+      const full = d.customized >= d.total;
+      $("cnt").style.background = full ? "#153d22" : "#4d3a10";
+      $("cnt").style.color      = full ? "#86efac" : "#fcd34d";
     }
   } catch (e) {}
   $("pick").innerHTML = ROLES.map(([r, ko]) => {
     const st = states[r];
     const mark = st === "customized" ? "✅" : (st ? "⏳" : "");
     return `<a href="?role=${r}" class="${r === role ? "on" : ""}">${ko}
-      <span style="opacity:.6">${r}</span><span class="st ${st || ''}">${mark}</span></a>`;
+      <span class="en">${r}</span><span class="st">${mark}</span></a>`;
   }).join("");
 }
 

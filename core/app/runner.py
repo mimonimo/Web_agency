@@ -354,10 +354,19 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
 TEMPLATES = Path(__file__).parent / "templates"
 
 
+def _task_name(sdef: Any) -> str:
+    """이 단계의 태스크 이름. 게이트는 task 가 비어 있으므로 'gate' 로 본다."""
+    if sdef.task:
+        return sdef.task
+    if sdef.type in ("gate", "human_gate"):
+        return "gate"
+    return "work"
+
+
 def _instruction(sdef: Any) -> str:
     """작업 지시 템플릿 (BRIEF §4.1). 없으면 빈 문자열."""
     parts = []
-    f = TEMPLATES / f"{sdef.task}.md"
+    f = TEMPLATES / f"{_task_name(sdef)}.md"
     if f.exists():
         parts.append(f.read_text(encoding="utf-8").strip())
     # ★ AGENT.md 초안을 만드는 단계에는 BRIEF §4.1 의 템플릿을 반드시 붙인다
@@ -395,11 +404,12 @@ async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
     hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
     req = a2a.TaskRequest(
         role=role, cycle_id=cycle_id, step_id=sdef.id, step_name=sdef.name,
-        task=sdef.task or "work",
+        task=_task_name(sdef),
         spec_url=f"{hq}/api/specs/{role}/raw",
         context_urls=tuple(f"{hq}/api/files?path={c}" for c in sdef.inputs
                            if c not in ("order",)),
-        outputs=tuple(o for o in sdef.outputs if "*" not in o),
+        outputs=(tuple(o for o in sdef.outputs if "*" not in o)
+                 or (("VERDICT.md",) if sdef.type in ("gate",) else ())),
         timeout_sec=sdef.timeout_sec,
         order=_order_text(cycle_id) if "order" in sdef.inputs else "",
         instruction=_instruction(sdef),
