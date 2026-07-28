@@ -277,22 +277,30 @@ async def _execute_a2a(cycle_id: int, sdef: Any) -> dict[str, Any]:
     # ★ S2 는 11개 AGENT.md 초안을 만든다 (인수 #12).
     if sdef.emits_specs:
         bodies = _harvest_spec_bodies(out_dir)
-        # 한 번의 호출로 11개를 다 쓰게 하면 모델이 중간에 멈춘다.
-        # 빠진 역할은 **하나씩 따로** 기획에게 다시 시킨다. 느리지만 확실하다.
+        # 한 번의 호출로 11개를 다 쓰게 하면 모델이 2~3개 쓰고 멈춘다.
+        # 그렇다고 11번 따로 부르면 S2 하나에 20분이 넘는다.
+        # → **3개씩 묶어서** 부른다. 모자란 것만 마지막에 하나씩 다시 시킨다.
         planner_url = _role_url("planner")
-        for role in ROLES:
-            if spec_ok(bodies.get(role, "")):
-                continue
-            if not planner_url:
-                break
-            try:
-                body = await _draft_one_spec(cycle_id, sdef, planner_url, role)
-                if spec_ok(body):
-                    bodies[role] = body
-                elif body and len(body.strip()) > len(bodies.get(role, "")):
-                    bodies[role] = body      # 완벽하진 않아도 있는 게 낫다
-            except Exception:
-                pass                       # 실패해도 기본 템플릿으로 채운다
+        if planner_url:
+            missing = [r for r in ROLES if not spec_ok(bodies.get(r, ""))]
+            for i in range(0, len(missing), SPEC_BATCH):
+                chunk = missing[i:i + SPEC_BATCH]
+                try:
+                    got = await _draft_specs_batch(cycle_id, sdef, planner_url, chunk)
+                    for r, body in got.items():
+                        if len(body.strip()) > len(bodies.get(r, "")):
+                            bodies[r] = body
+                except Exception:
+                    pass
+
+            # 묶음으로도 안 나온 것만 하나씩. 여기까지 오는 건 보통 1~2개다.
+            for role in [r for r in ROLES if not spec_ok(bodies.get(r, ""))]:
+                try:
+                    body = await _draft_one_spec(cycle_id, sdef, planner_url, role)
+                    if len(body.strip()) > len(bodies.get(role, "")):
+                        bodies[role] = body
+                except Exception:
+                    pass                   # 실패해도 기본 템플릿으로 채운다
 
         db = SessionLocal()
         try:
@@ -332,6 +340,10 @@ def _role_url(role: str) -> str | None:
         db.close()
 
 
+# 한 번에 몇 개의 AGENT.md 를 쓰게 할지. 너무 크면 모델이 중간에 멈춘다.
+SPEC_BATCH = int(os.getenv("SPEC_BATCH", "3"))
+
+
 ROLE_HINT = {
     "pm": "일정·병목 관리와 우선순위 판단",
     "planner": "요구사항 해석과 화면 정의",
@@ -345,6 +357,57 @@ ROLE_HINT = {
     "qa": "테스트와 결함 발견",
     "customer": "고객 입장의 검수와 문의",
 }
+
+
+async def _draft_specs_batch(cycle_id: int, sdef: Any, url: str,
+                             roles: list[str]) -> dict[str, str]:
+    """기획에게 여러 역할의 AGENT.md 를 한 번에 쓰게 한다 (기본 3개)."""
+    from . import a2a_client as a2a
+
+    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    listing = "\n".join(
+        f"  - `agents/{r}/AGENT.md` — {ROLE_HINT.get(r, r)}" for r in roles)
+    instruction = (
+        f"아래 {len(roles)}개 역할의 AGENT.md 초안을 쓴다. **이 {len(roles)}개만** 만든다.\n\n"
+        f"{listing}\n\n"
+        + (TEMPLATES / "planner_draft_prompt.md").read_text(encoding="utf-8")
+        .split("## 형식", 1)[-1].split("## 지켜야 할 것", 1)[0].strip()
+        + "\n\n⚠️ 위 파일을 **전부** 만들어라. 하나라도 빠지면 다음 단계가 막힌다."
+        "\n⚠️ '금지' 칸은 역할마다 달라야 한다. 같은 문장을 복사하지 마라."
+    )
+    req = a2a.TaskRequest(
+        role="planner", cycle_id=cycle_id, step_id=sdef.id,
+        step_name=f"AGENT.md 초안 {len(roles)}개",
+        task="draft_specs_batch",
+        spec_url=f"{hq}/api/specs/planner/raw",
+        context_urls=tuple(f"{hq}/api/files?path={quote(c)}"
+                           for c in resolve_inputs(cycle_id, ("SRS.md", "SCREENS.md"))),
+        outputs=tuple(f"agents/{r}/AGENT.md" for r in roles),
+        timeout_sec=600,
+        order=_order_text(cycle_id),
+        instruction=instruction,
+        work_key=f"{sdef.id}-batch-{roles[0]}",
+    )
+    sent = await a2a.send_message(url, req)
+    out: dict[str, str] = {}
+    deadline = time.time() + 600
+    while time.time() < deadline:
+        await asyncio.sleep(5)
+        t = await a2a.get_task(url, sent.task_id)
+        if t.state == "completed":
+            for a in t.artifacts:
+                name = a.get("name", "").replace("\\", "/")
+                for r in roles:
+                    if name.endswith(f"{r}/AGENT.md"):
+                        txt = a.get("text", "")
+                        if txt.lstrip().startswith("---"):
+                            parts = txt.split("---", 2)
+                            txt = parts[2] if len(parts) > 2 else txt
+                        out[r] = txt.strip()
+            return out
+        if t.state in ("failed", "canceled"):
+            return out
+    return out
 
 
 async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
