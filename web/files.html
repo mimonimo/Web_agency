@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>파일 탐색기 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{max-width:1400px;margin:1.2rem auto;padding:0 1.2rem}
+  .crumb{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.9rem;
+         background:var(--panel);border:1px solid var(--line);border-radius:10px;
+         padding:.65rem .9rem;font-family:ui-monospace,monospace;font-size:.98rem}
+  .crumb a{color:#a5d8ff;text-decoration:none;font-weight:600}
+  .crumb a:hover{text-decoration:underline}
+  .crumb span.sep{color:var(--dim)}
+
+  .cols{display:grid;grid-template-columns:minmax(300px,1fr) 2fr;gap:1rem}
+  @media (max-width:940px){ .cols{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+        padding:.9rem;display:flex;flex-direction:column}
+  .card h3{margin:0 0 .7rem;font-size:1rem;color:var(--dim);font-weight:700;
+           display:flex;align-items:center;gap:.6rem}
+  .card h3 .act{margin-left:auto;display:flex;gap:.4rem;align-items:center}
+
+  .list{max-height:66vh;overflow-y:auto}
+  .list a{display:flex;gap:.6rem;align-items:center;padding:.5rem .55rem;
+          border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;font-size:1rem}
+  .list a:hover{background:#1c2432}
+  .list a.on{background:#1b2740}
+  .list .ic{font-size:1.05rem;width:1.4rem;text-align:center}
+  .list .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            font-family:ui-monospace,monospace;font-size:.95rem}
+  .list .meta{color:var(--dim);font-size:.85rem;white-space:nowrap}
+
+  textarea{width:100%;min-height:62vh;background:#0f131b;color:var(--fg);
+           border:1.5px solid var(--line);border-radius:10px;padding:1rem;
+           font-family:ui-monospace,"D2Coding",monospace;font-size:1rem;line-height:1.7;
+           resize:vertical}
+  textarea:focus{outline:none;border-color:var(--run);box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  .btn{background:var(--panel2);color:var(--fg);border:1.5px solid var(--line);
+       border-radius:9px;padding:.45rem .9rem;cursor:pointer;font-family:inherit;
+       font-size:.92rem;font-weight:600}
+  .btn:hover{background:#2c384c}
+  .btn.primary{background:var(--run);color:#0d1017;border-color:var(--run);font-weight:800}
+  .btn.primary:hover{background:#7cb4fb}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+  .msg{font-size:.92rem;font-weight:600}
+  .hint{color:var(--dim);font-size:.95rem;padding:.5rem}
+  .quick{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.9rem}
+  .quick a{border:1.5px solid var(--line);border-radius:9px;padding:.4rem .8rem;
+           font-size:.92rem;font-weight:600;text-decoration:none;color:var(--fg);background:#121824}
+  .quick a:hover{background:#222c3c}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">AGORA<span>Web</span></div>
+  <div class="cycleinfo">
+    <a class="link" href="/index.html">픽셀 오피스 →</a>
+    <a class="link" href="/agent.html" style="margin-left:.7rem">에이전트 →</a>
+    <a class="link" href="/board.html" style="margin-left:.7rem">티켓 보드 →</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="quick" id="quick"></div>
+  <div class="crumb" id="crumb"></div>
+  <div class="cols">
+    <div class="card">
+      <h3>파일 <span class="act"><span class="meta" id="count"></span></span></h3>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="card">
+      <h3><span id="fname">파일을 고르세요</span>
+        <span class="act">
+          <span class="msg" id="msg"></span>
+          <button class="btn" id="reload">되돌리기</button>
+          <button class="btn primary" id="save" disabled>저장</button>
+        </span>
+      </h3>
+      <textarea id="body" spellcheck="false" placeholder="왼쪽에서 파일을 고르면 내용이 나옵니다"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=(i)=>document.getElementById(i);
+const esc=(s)=>String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+const sz=(n)=>n<1024?`${n}B`:n<1048576?`${(n/1024).toFixed(1)}KB`:`${(n/1048576).toFixed(1)}MB`;
+let dir=new URLSearchParams(location.search).get("path")||"";
+let cur=null, base="";
+
+async function quick(){
+  let cid="";
+  try{ const d=(await (await fetch("/api/dashboard")).json()).data;
+       if(d.cycle) cid=d.cycle.id; }catch(e){}
+  $("quick").innerHTML=[
+    ["repo/ 전체",""],
+    ["확정 산출물","project-001"],
+    ["AGENT.md 11개","project-001/agents"],
+    ...(cid?[[`사이클 #${cid} 실행 결과`,`runs/${cid}`]]:[]),
+  ].map(([ko,p])=>`<a href="?path=${encodeURIComponent(p)}">${ko}</a>`).join("");
+}
+
+async function ls(){
+  const r=await fetch(`/api/files/tree?path=${encodeURIComponent(dir)}`);
+  if(!r.ok){ $("list").innerHTML=`<div class="hint">경로를 읽을 수 없습니다.</div>`; return; }
+  const d=(await r.json()).data;
+
+  const parts=dir?dir.split("/"):[];
+  let acc="";
+  $("crumb").innerHTML=`<a href="?path=">repo</a>`+parts.map(p=>{
+    acc=acc?`${acc}/${p}`:p;
+    return `<span class="sep">/</span><a href="?path=${encodeURIComponent(acc)}">${esc(p)}</a>`;
+  }).join("");
+
+  const up = dir ? `<a href="?path=${encodeURIComponent(d.parent||"")}">
+      <span class="ic">↰</span><span class="nm">..</span></a>` : "";
+  $("list").innerHTML = up + (d.items||[]).map(it=>
+    it.type==="dir"
+      ? `<a href="?path=${encodeURIComponent(it.path)}">
+           <span class="ic">📁</span><span class="nm">${esc(it.name)}</span>
+           <span class="meta">${it.count}개</span></a>`
+      : `<a href="#" data-p="${esc(it.path)}" onclick="open_('${encodeURI(it.path)}');return false">
+           <span class="ic">📄</span><span class="nm">${esc(it.name)}</span>
+           <span class="meta">${sz(it.size)}</span>${
+             /\.(html?|css|js|svg|png|jpe?g)$/i.test(it.name)
+               ? `<a class="meta" style="color:#86efac" target="_blank"
+                    href="/preview/${it.path}" onclick="event.stopPropagation()">열기</a>` : ""
+           }</a>`
+  ).join("") || `<div class="hint">비어 있습니다.</div>`;
+  $("count").textContent=`${(d.items||[]).length}개`;
+}
+
+async function open_(p){
+  cur=decodeURI(p);
+  document.querySelectorAll(".list a").forEach(a=>a.classList.toggle("on",a.dataset.p===cur));
+  $("fname").textContent=cur;
+  $("msg").textContent=""; $("body").value="불러오는 중...";
+  const r=await fetch(`/api/files?path=${encodeURIComponent(cur)}`);
+  base = r.ok ? await r.text() : "(읽을 수 없습니다)";
+  $("body").value=base;
+  $("save").disabled=!r.ok;
+}
+$("save").onclick=async()=>{
+  if(!cur) return;
+  $("save").disabled=true;
+  const r=await fetch(`/api/files?path=${encodeURIComponent(cur)}`,
+    {method:"PUT",headers:{"Content-Type":"text/plain"},body:$("body").value});
+  const ok=r.ok;
+  $("msg").textContent= ok?"저장했습니다":"저장 실패";
+  $("msg").style.color= ok?"var(--ok)":"var(--bad)";
+  if(ok) base=$("body").value;
+  $("save").disabled=false;
+};
+$("reload").onclick=()=>{ if(cur) $("body").value=base; $("msg").textContent=""; };
+
+quick(); ls();
+</script>
+</body>
+</html>

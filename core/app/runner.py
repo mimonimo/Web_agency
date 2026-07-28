@@ -116,7 +116,21 @@ async def _drive(cycle_id: int) -> None:
                                     role=step.role, path=a))
                 db.commit()
 
+            # ★ 게이트라면 에이전트의 판정을 읽어 반려 여부를 정한다 (인수 #19)
             cv, sv = services.snapshot(db, cycle)
+            if GATE_AUTO and sdef is not None and sdef.type == "gate":
+                rejected, reason = read_verdict(cycle_id, key)
+                if rejected:
+                    t = next_step(cv, sv, Event.GATE_REJECT,
+                                  {"step": key, "reason": reason})
+                    if t.action is not Action.NOOP:
+                        services.mirror(db, cycle_id, step.role or "qa", "hq", "reject",
+                                        f"{key} 반려 — {reason[:120]}")
+                        services.apply(db, cycle, t, actor=step.role or "qa")
+                        if t.action is Action.INVALIDATE_FROM:
+                            continue          # 되감긴 지점부터 다시 돈다
+                        return
+
             t = next_step(cv, sv, Event.STEP_DONE, {"step": key})
             services.apply(db, cycle, t)
 
@@ -124,6 +138,36 @@ async def _drive(cycle_id: int) -> None:
                 return
         finally:
             db.close()
+
+
+GATE_AUTO = os.getenv("GATE_AUTO", "1") == "1"
+
+
+def read_verdict(cycle_id: int, step_key: str) -> tuple[bool, str]:
+    """게이트 에이전트가 쓴 VERDICT.md 를 읽는다.
+
+    반환: (반려인가?, 사유)
+
+    첫 줄에 `판정: 통과` 또는 `판정: 반려` 를 쓰게 되어 있다 (templates/gate.md).
+    ⚠️ 읽을 수 없거나 애매하면 **통과로 본다.** 게이트가 판정을 못 했다고
+       사이클을 멈춰 세우면 수업이 진행되지 않는다. 강사가 수동으로 반려하면 된다.
+    """
+    base = REPO_ROOT / "runs" / str(cycle_id) / step_key
+    for p in (base / "output" / "VERDICT.md", base / "output" / "verdict.md"):
+        if not p.exists():
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        head = "\n".join(text.strip().splitlines()[:5])
+        if "반려" in head and "통과" not in head.split("반려")[0][-20:]:
+            reason = ""
+            for line in text.splitlines():
+                t = line.strip().lstrip("-*# ").strip()
+                if t and "판정" not in t:
+                    reason = t
+                    break
+            return True, (reason or "게이트가 반려했다")[:300]
+        return False, ""
+    return False, ""
 
 
 # ── 실행 백엔드 ────────────────────────────────────────────────────────
@@ -464,10 +508,11 @@ def _save_artifacts(cycle_id: int, sdef: Any, role: str, t: Any,
         rp.parent.mkdir(parents=True, exist_ok=True)
         rp.write_text(t.report, encoding="utf-8")
 
+    # ※ 완료 미러링은 노드 어댑터가 이미 보낸다 (BRIEF §5.3).
+    #    여기서 또 넣으면 픽셀 오피스 로그에 같은 줄이 두 번 뜬다.
+    #    HQ 는 감사 로그만 남긴다.
     db = SessionLocal()
     try:
-        services.mirror(db, cycle_id, role, "hq", "response",
-                        f"{sdef.id} 완료 — 산출물 {len(saved)}건")
         audit(db, role, "step.artifacts", f"cycle:{cycle_id}:{sdef.id}",
               {"count": len(saved)})
         db.commit()

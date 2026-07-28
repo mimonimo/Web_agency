@@ -76,12 +76,14 @@ body{
 /* ── 책상 11개 ────────────────────────────────────────────── */
 .desk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:.65rem}
 .desk{
+  display:block;text-decoration:none;color:inherit;cursor:pointer;
   position:relative;border:2px solid var(--line);border-radius:var(--r);
   padding:.7rem .5rem .6rem;background:#121824;text-align:center;
   transition:border-color .2s, box-shadow .2s;
 }
 /* 현재 step 담당자는 테두리 강조 */
 .desk.busy{border-color:var(--run);box-shadow:0 0 0 3px rgba(96,165,250,.22)}
+.desk:hover{border-color:#4d5b76;background:#182031}
 .desk.down{opacity:.42}
 .desk .avatar{font-size:2rem;line-height:1.25}
 .desk .role{font-weight:700;font-size:1rem}
@@ -221,3 +223,14 @@ dialog button.primary:hover{background:#7cb4fb}
 .placeholder{text-align:center;padding:2rem}
 .placeholder h1{margin:0 0 .5rem;letter-spacing:.08em}
 .placeholder .phase{color:var(--dim)}
+
+/* ── 완성된 사이트 (서버실) ─────────────────────────────── */
+.sites{margin-top:.9rem;border-top:1px solid var(--line);padding-top:.8rem}
+.sites .hd{font-size:.9rem;color:var(--dim);font-weight:700;margin-bottom:.5rem}
+.sites a{display:flex;align-items:center;gap:.5rem;text-decoration:none;
+         border:1.5px solid var(--ok);border-radius:9px;padding:.5rem .7rem;
+         margin-bottom:.4rem;background:#122a1b;color:#bbf7d0;font-size:.95rem;
+         font-weight:600;transition:background .12s}
+.sites a:hover{background:#183a26}
+.sites a .sub{margin-left:auto;font-size:.82rem;color:#7fbf95;font-weight:400}
+.sites .none{color:var(--dim);font-size:.92rem}

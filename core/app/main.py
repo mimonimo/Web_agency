@@ -25,6 +25,7 @@ from . import a2a_server, services
 from .db import Base, SessionLocal, engine
 from .models import Cycle
 from .routers import (
+    agents,
     artifacts,
     cycles,
     dashboard,
@@ -111,12 +112,14 @@ app = FastAPI(
 )
 
 # BRIEF §7 의 8개 라우터
-for r in (cycles, nodes, specs, tickets, orders, messages, artifacts, dashboard):
+for r in (cycles, nodes, specs, tickets, orders, messages, artifacts,
+          dashboard, agents):
     app.include_router(r.router)
 
 # HQ 자신도 A2A 에이전트로 노출 (선택 — BRIEF §2)
 app.include_router(a2a_server.router)
 app.include_router(artifacts.files_router)
+app.include_router(artifacts.preview_router)
 
 
 @app.get("/api/health", tags=["health"])

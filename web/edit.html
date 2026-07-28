@@ -6,24 +6,55 @@
 <title>AGENT.md 편집 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .wrap{max-width:1000px;margin:1.4rem auto;padding:0 1.2rem}
-  .pick{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem}
+  .wrap{max-width:1080px;margin:1.3rem auto;padding:0 1.2rem}
+
+  .pick{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
   .pick a{border:1.5px solid var(--line);border-radius:10px;padding:.55rem .9rem;
           font-size:1rem;font-weight:600;text-decoration:none;color:var(--fg);
           background:#121824;display:inline-flex;align-items:center;gap:.4rem;
           transition:background .12s,border-color .12s}
   .pick a:hover{background:#222c3c}
   .pick a.on{border-color:var(--run);background:#1b2740;box-shadow:0 0 0 3px rgba(96,165,250,.18)}
-  .pick a .en{font-size:.8rem;color:var(--dim);font-family:ui-monospace,monospace}
-  .pick a .st{font-size:1rem}
-  .head{display:flex;align-items:baseline;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap}
-  .head h1{margin:0;font-size:1.35rem}
-  .head .path{color:var(--dim);font-size:.85rem;font-family:ui-monospace,monospace}
-  textarea{width:100%;height:58vh;background:#0f131b;color:var(--fg);
+  .pick a .en{font-size:.82rem;color:var(--dim);font-family:ui-monospace,monospace}
+
+  .filebar{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;
+           background:var(--panel);border:1px solid var(--line);border-radius:10px;
+           padding:.7rem .9rem;margin-bottom:.9rem}
+  .filebar .lbl{font-size:.85rem;color:var(--dim);font-weight:600;white-space:nowrap}
+  .filebar code{font-family:ui-monospace,"D2Coding",monospace;font-size:.95rem;
+                background:#0f131b;border:1px solid var(--line);border-radius:7px;
+                padding:.35rem .6rem;color:#a5d8ff;overflow-x:auto;white-space:nowrap;flex:1}
+  .filebar button{background:var(--panel2);color:var(--fg);border:1.5px solid var(--line);
+                  border-radius:8px;padding:.4rem .8rem;cursor:pointer;font-family:inherit;
+                  font-size:.9rem;font-weight:600;white-space:nowrap}
+  .filebar button:hover{background:#2c384c}
+
+  .meta{display:flex;gap:1.2rem;flex-wrap:wrap;font-size:.9rem;color:var(--dim);
+        margin-bottom:.9rem;padding:0 .2rem}
+  .meta b{color:var(--fg);font-weight:600}
+  .meta .st-draft{color:#fcd34d;font-weight:700}
+  .meta .st-customized{color:#86efac;font-weight:700}
+
+  .tabs{display:flex;gap:.4rem;margin-bottom:.7rem}
+  .tabs button{background:transparent;color:var(--dim);border:0;border-bottom:3px solid transparent;
+               padding:.5rem .9rem;cursor:pointer;font-family:inherit;font-size:1rem;font-weight:700}
+  .tabs button:hover{color:var(--fg)}
+  .tabs button.on{color:var(--fg);border-bottom-color:var(--run)}
+
+  textarea{width:100%;height:56vh;background:#0f131b;color:var(--fg);
            border:1.5px solid var(--line);border-radius:10px;padding:1.1rem;
            font-family:ui-monospace,"D2Coding","Noto Sans Mono CJK KR",monospace;
            font-size:1.05rem;line-height:1.75;resize:vertical;tab-size:2}
   textarea:focus{outline:none;border-color:var(--run);box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  textarea[readonly]{background:#0c0f16;color:var(--dim)}
+
+  pre.view{height:56vh;overflow:auto;background:#0f131b;border:1.5px solid var(--line);
+           border-radius:10px;padding:1.1rem;margin:0;
+           font-family:ui-monospace,"D2Coding",monospace;font-size:1rem;line-height:1.7;
+           white-space:pre-wrap;word-break:break-word}
+  pre.view .add{color:#86efac} pre.view .del{color:#fca5a5}
+  pre.view .hd{color:#93c5fd;font-weight:700}
+
   .bar2{display:flex;align-items:center;gap:.7rem;margin-top:.9rem;flex-wrap:wrap}
   .bar2 button{background:var(--run);color:#0d1017;border:0;border-radius:10px;
                padding:.75rem 1.8rem;font-weight:800;cursor:pointer;font-family:inherit;
@@ -33,11 +64,13 @@
   .bar2 button.ghost{background:var(--panel2);color:var(--fg);
                      border:1.5px solid var(--line);font-weight:600}
   .bar2 button.ghost:hover{background:#2c384c}
+  .bar2 button:disabled{opacity:.35;cursor:not-allowed}
   .msg{font-size:1rem;font-weight:600}
   .msg.ok{color:var(--ok)} .msg.err{color:var(--bad)} .msg.dim{color:var(--dim);font-weight:400}
+
   .hint{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--run);
         border-radius:0 10px 10px 0;padding:1rem 1.2rem;font-size:1rem;color:var(--dim);
-        margin-bottom:1.2rem;line-height:1.7}
+        margin-bottom:1.1rem;line-height:1.7}
   .hint b{color:var(--fg)}
   .counter{margin-left:auto;font-size:1.05rem;font-weight:800;
            padding:.3rem .8rem;border-radius:999px;background:#4d3a10;color:#fcd34d}
@@ -49,6 +82,7 @@
   <div class="cycleinfo">
     <span id="cnt" class="counter">-</span>
     <a class="link" href="/index.html" style="margin-left:1rem">픽셀 오피스 →</a>
+    <a class="link" href="/board.html" style="margin-left:.8rem">티켓 보드 →</a>
   </div>
 </header>
 
@@ -56,23 +90,34 @@
   <div class="hint">
     <b>여기가 오늘 수업의 핵심입니다.</b> 기획 에이전트가 만든 초안에
     <b>내 전문 지식을 더해</b> 고치세요. 특히 <b>금지</b> 칸에
-    "이 역할이 이번 요구사항에서 조심해야 할 것"을 구체적으로 적으면
-    결과가 눈에 띄게 달라집니다. 저장하면 내 책상에 ✅ 가 켜지고,
-    11명이 다 저장하면 사이클이 자동으로 다시 굴러갑니다.
+    "이 역할이 이번 요구사항에서 조심해야 할 것"을 구체적으로 적으면 결과가 눈에 띄게 달라집니다.
+    저장하면 내 책상에 ✅ 가 켜지고, 11명이 다 저장하면 사이클이 자동으로 다시 굴러갑니다.
+    <br>다른 역할의 파일도 눌러서 자유롭게 볼 수 있습니다.
   </div>
 
   <div class="pick" id="pick"></div>
 
-  <div class="head">
-    <h1 id="title">역할을 고르세요</h1>
-    <span class="path" id="path"></span>
+  <div class="filebar">
+    <span class="lbl">파일 경로</span>
+    <code id="path">역할을 고르세요</code>
+    <button id="copy" type="button">복사</button>
+    <button id="open" type="button">원문 보기</button>
+  </div>
+
+  <div class="meta" id="meta"></div>
+
+  <div class="tabs">
+    <button data-tab="edit" class="on">✎ 편집</button>
+    <button data-tab="raw">📄 원문 (front-matter 포함)</button>
+    <button data-tab="diff">🔀 초안과 비교</button>
   </div>
 
   <textarea id="ed" spellcheck="false" placeholder="역할을 고르면 내용이 나옵니다"></textarea>
+  <pre class="view" id="view" hidden></pre>
 
   <div class="bar2">
     <button id="save">저장</button>
-    <button id="reload" class="ghost">불러오기</button>
+    <button id="reload" class="ghost">되돌리기</button>
     <span id="msg" class="msg dim"></span>
   </div>
 </div>
@@ -80,23 +125,44 @@
 <script>
 const ROLES = [
   ["pm","관리"],["planner","기획"],["sales","영업"],["sysadmin","인프라"],
-  ["designer","디자인"],["frontend","프론트엔드"],["backend","백엔드"],["dba","DB"],
+  ["designer","디자인"],["frontend","프론트"],["backend","백엔드"],["dba","DB"],
   ["security","보안"],["qa","QA"],["customer","고객"],
 ];
 const $ = (id) => document.getElementById(id);
 let role = new URLSearchParams(location.search).get("role") || "";
+let rawText = "";      // front-matter 포함 원문
+let baseBody = "";     // 마지막으로 불러온 본문
 let dirty = false;
+let tab = "edit";
 
-function setMsg(kind, text) { $("msg").className = "msg " + kind; $("msg").textContent = text; }
+const setMsg = (k, t) => { $("msg").className = "msg " + k; $("msg").textContent = t; };
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+const pathOf = (r) => `repo/project-001/agents/${r}/AGENT.md`;
+
+/* front-matter 를 정확히 한 번만 떼어낸다.
+   split("---", 3) 을 쓰면 본문에 있는 --- 구분선에서 잘려나간다. 실제로 겪었다. */
+function stripFrontMatter(t) {
+  const m = t.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  return m ? t.slice(m[0].length).replace(/^\r?\n+/, "") : t;
+}
+function frontMatter(t) {
+  const m = t.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return {};
+  const o = {};
+  m[1].split(/\r?\n/).forEach(l => {
+    const i = l.indexOf(":");
+    if (i > 0) o[l.slice(0, i).trim()] = l.slice(i + 1).trim();
+  });
+  return o;
+}
 
 async function drawPicker() {
-  let states = {}, cnt = "";
+  let states = {};
   try {
     const d = (await (await fetch("/api/specs")).json()).data;
     states = d.by_role || {};
     if (d.total) {
-      cnt = `AGENT.md ${d.customized} / ${d.total}`;
-      $("cnt").textContent = cnt;
+      $("cnt").textContent = `AGENT.md ${d.customized} / ${d.total}`;
       const full = d.customized >= d.total;
       $("cnt").style.background = full ? "#153d22" : "#4d3a10";
       $("cnt").style.color      = full ? "#86efac" : "#fcd34d";
@@ -105,41 +171,112 @@ async function drawPicker() {
   $("pick").innerHTML = ROLES.map(([r, ko]) => {
     const st = states[r];
     const mark = st === "customized" ? "✅" : (st ? "⏳" : "");
-    return `<a href="?role=${r}" class="${r === role ? "on" : ""}">${ko}
-      <span class="en">${r}</span><span class="st">${mark}</span></a>`;
+    return `<a href="?role=${r}" class="${r === role ? "on" : ""}"
+      title="${pathOf(r)}">${ko}<span class="en">${r}</span>${mark}</a>`;
   }).join("");
 }
 
 async function load() {
   if (!role) return;
-  $("title").textContent = (ROLES.find(x => x[0] === role) || [])[1] + " — AGENT.md";
-  $("path").textContent = `repo/project-001/agents/${role}/AGENT.md`;
+  $("path").textContent = pathOf(role);
   setMsg("dim", "불러오는 중...");
   const r = await fetch(`/api/specs/${role}/raw`);
-  if (!r.ok) { setMsg("err", "아직 초안이 만들어지지 않았습니다 (S2 단계에서 생성됩니다)"); return; }
-  let t = await r.text();
-  // front-matter 는 HQ 가 관리한다. 학생에게는 본문만 보여준다.
-  if (t.startsWith("---")) { const p = t.split("---", 3); t = p.length > 2 ? p[2] : t; }
-  $("ed").value = t.replace(/^\n+/, "");
+  if (!r.ok) {
+    $("ed").value = ""; $("meta").innerHTML = "";
+    setMsg("err", "아직 초안이 없습니다 (S2 기획 단계에서 생성됩니다)");
+    return;
+  }
+  rawText = await r.text();
+  baseBody = stripFrontMatter(rawText);
+  $("ed").value = baseBody;
   dirty = false;
-  setMsg("dim", "불러왔습니다. 고친 뒤 저장을 누르세요.");
+
+  const fm = frontMatter(rawText);
+  $("meta").innerHTML = [
+    fm.role   ? `역할 <b>${esc(fm.role)}</b>` : "",
+    fm.cycle  ? `사이클 <b>#${esc(fm.cycle)}</b>` : "",
+    fm.status ? `상태 <span class="st-${esc(fm.status)}">${fm.status === "customized" ? "학생이 수정함" : "초안"}</span>` : "",
+    fm.customized_at && fm.customized_at !== "null" ? `수정 <b>${esc(fm.customized_at.slice(0,19).replace("T"," "))}</b>` : "",
+    `${baseBody.length}자`,
+  ].filter(Boolean).join(" · ");
+
+  setMsg("dim", "고친 뒤 저장을 누르세요.");
+  render();
 }
+
+/* 아주 단순한 줄 단위 diff — 라이브러리 없이 (CDN 금지) */
+function lineDiff(a, b) {
+  const A = a.split("\n"), B = b.split("\n");
+  const setA = new Set(A), setB = new Set(B);
+  const out = [];
+  B.forEach(l => { if (!setA.has(l) && l.trim()) out.push(`<span class="add">+ ${esc(l)}</span>`); });
+  A.forEach(l => { if (!setB.has(l) && l.trim()) out.push(`<span class="del">- ${esc(l)}</span>`); });
+  return out.length ? out.join("\n") : "(초안과 같습니다)";
+}
+
+async function render() {
+  const isEdit = tab === "edit";
+  $("ed").hidden = !isEdit;
+  $("view").hidden = isEdit;
+  if (isEdit) return;
+
+  if (tab === "raw") {
+    $("view").innerHTML = esc(rawText) ||
+      "(내용 없음)";
+    return;
+  }
+  // diff — 서버가 보관한 초안 대비 diff 를 먼저 시도하고, 없으면 화면에서 계산
+  $("view").textContent = "불러오는 중...";
+  const r = await fetch(`/api/specs/${role}/diff`);
+  if (r.ok) {
+    const t = await r.text();
+    if (t.trim()) {
+      $("view").innerHTML = t.split("\n").map(l =>
+        l.startsWith("+") ? `<span class="add">${esc(l)}</span>` :
+        l.startsWith("-") ? `<span class="del">${esc(l)}</span>` :
+        l.startsWith("@@") || l.startsWith("---") || l.startsWith("+++")
+          ? `<span class="hd">${esc(l)}</span>` : esc(l)).join("\n");
+      return;
+    }
+  }
+  $("view").innerHTML = lineDiff(baseBody, $("ed").value);
+}
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    tab = b.dataset.tab;
+    render();
+  };
+});
+
+$("copy").onclick = async () => {
+  if (!role) return;
+  try { await navigator.clipboard.writeText(pathOf(role)); setMsg("ok", "경로를 복사했습니다"); }
+  catch { setMsg("dim", pathOf(role)); }
+};
+$("open").onclick = () => { if (role) window.open(`/api/specs/${role}/raw`, "_blank"); };
 
 $("save").onclick = async () => {
   if (!role) return setMsg("err", "역할을 먼저 고르세요");
   const body = $("ed").value;
   if (!body.trim()) return setMsg("err", "빈 내용은 저장할 수 없습니다");
+  $("save").disabled = true;
   setMsg("dim", "저장 중...");
-  const r = await fetch(`/api/specs/${role}/raw`, {
-    method: "PUT", headers: { "Content-Type": "text/plain" }, body,
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) return setMsg("err", j.detail || "저장 실패");
-  dirty = false;
-  const d = j.data || {};
-  setMsg("ok", `저장했습니다. ${d.customized ?? "?"}/${d.total ?? "?"} 완료`
-              + (d.resumed ? " — 전원 완료! 사이클이 다시 굴러갑니다 🎉" : ""));
-  drawPicker();
+  try {
+    const r = await fetch(`/api/specs/${role}/raw`, {
+      method: "PUT", headers: { "Content-Type": "text/plain" }, body,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return setMsg("err", j.detail || "저장 실패");
+    dirty = false;
+    const d = j.data || {};
+    setMsg("ok", `저장했습니다. ${d.customized ?? "?"}/${d.total ?? "?"} 완료`
+                + (d.resumed ? " — 전원 완료! 사이클이 다시 굴러갑니다 🎉" : ""));
+    await load();
+    drawPicker();
+  } finally { $("save").disabled = false; }
 };
 
 $("reload").onclick = () => {

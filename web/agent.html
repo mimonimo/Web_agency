@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에이전트 상세 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{max-width:1240px;margin:1.2rem auto;padding:0 1.2rem}
+  .pick{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
+  .pick a{border:1.5px solid var(--line);border-radius:10px;padding:.5rem .85rem;
+          font-size:1rem;font-weight:600;text-decoration:none;color:var(--fg);
+          background:#121824;display:inline-flex;align-items:center;gap:.4rem}
+  .pick a:hover{background:#222c3c}
+  .pick a.on{border-color:var(--run);background:#1b2740;box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+  .pick a .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+  .pick a.up .dot{background:var(--ok)}
+
+  .cols{display:grid;grid-template-columns:1.15fr 1fr;gap:1rem}
+  @media (max-width:1000px){ .cols{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem;margin-bottom:1rem}
+  .card h3{margin:0 0 .8rem;font-size:1rem;color:var(--dim);display:flex;
+           align-items:center;gap:.6rem;font-weight:700}
+  .card h3 .act{margin-left:auto;display:flex;gap:.4rem}
+
+  .who{display:flex;align-items:center;gap:.9rem;margin-bottom:.9rem}
+  .who .ava{font-size:2.6rem}
+  .who .nm{font-size:1.45rem;font-weight:800}
+  .who .en{font-family:ui-monospace,monospace;color:var(--dim);font-size:.95rem}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;font-size:.95rem}
+  .kv dt{color:var(--dim)} .kv dd{margin:0}
+  .kv code{font-family:ui-monospace,monospace;font-size:.9rem;color:#a5d8ff}
+
+  .stp{display:grid;grid-template-columns:56px 1fr auto;gap:.7rem;align-items:center;
+       border:1px solid var(--line);border-left-width:4px;border-radius:8px;
+       padding:.55rem .8rem;margin-bottom:.5rem;background:#121824}
+  .stp .k{font-family:ui-monospace,monospace;font-weight:800}
+  .stp .st{font-size:.85rem;font-weight:700;padding:.15rem .6rem;border-radius:999px;
+           background:var(--panel2);color:var(--dim);white-space:nowrap}
+  .stp.DONE{border-left-color:var(--ok)}    .stp.DONE .st{background:#153d22;color:#86efac}
+  .stp.RUNNING{border-left-color:var(--run)}.stp.RUNNING .st{background:#1b2740;color:#93c5fd}
+  .stp.FAILED{border-left-color:var(--bad)} .stp.FAILED .st{background:#341a1a;color:#fecaca}
+  .stp.WAITING_HUMAN{border-left-color:var(--wait)}
+  .stp .sub{font-size:.85rem;color:var(--dim)}
+  .stp .err{grid-column:1/-1;font-size:.88rem;color:#fca5a5}
+
+  .files a{display:flex;gap:.6rem;align-items:center;padding:.45rem .5rem;
+           border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;font-size:.95rem}
+  .files a:hover{background:#1c2432}
+  .files .stepk{font-family:ui-monospace,monospace;font-size:.82rem;color:var(--dim);
+                background:var(--panel2);border-radius:5px;padding:.05rem .4rem}
+  .files .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .msgs{max-height:300px;overflow-y:auto;font-size:.92rem}
+  .msgs li{list-style:none;padding:.35rem .3rem;border-bottom:1px solid #232b3a;
+           display:flex;gap:.5rem;align-items:baseline}
+  .msgs .w{font-family:ui-monospace,monospace;color:var(--dim);font-size:.85rem;white-space:nowrap}
+  .msgs li.reject{background:#331a1a}
+
+  .btn{background:var(--panel2);color:var(--fg);border:1.5px solid var(--line);
+       border-radius:9px;padding:.45rem .9rem;cursor:pointer;font-family:inherit;
+       font-size:.92rem;font-weight:600;text-decoration:none;display:inline-block}
+  .btn:hover{background:#2c384c}
+  .btn.primary{background:var(--run);color:#0d1017;border-color:var(--run);font-weight:800}
+  .btn.primary:hover{background:#7cb4fb}
+  .btn.warn{border-color:#6b3030;color:#ffc9c9}
+  .btn.warn:hover{background:#43222a}
+  .btn:disabled{opacity:.35;cursor:not-allowed}
+
+  #viewer{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;
+          align-items:center;justify-content:center;padding:1.5rem;z-index:10}
+  #viewer.on{display:flex}
+  #viewer .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+               width:min(1000px,100%);max-height:90vh;display:flex;flex-direction:column}
+  #viewer .top{display:flex;align-items:center;gap:.7rem;padding:.9rem 1rem;
+               border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #viewer .top code{font-family:ui-monospace,monospace;font-size:.92rem;color:#a5d8ff;flex:1;
+                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #viewer textarea{flex:1;min-height:52vh;border:0;border-radius:0 0 12px 12px;
+                   background:#0f131b;color:var(--fg);padding:1rem;resize:none;
+                   font-family:ui-monospace,"D2Coding",monospace;font-size:1rem;line-height:1.7}
+  #viewer textarea:focus{outline:none}
+  .vmsg{font-size:.9rem;font-weight:600}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">AGORA<span>Web</span></div>
+  <div class="cycleinfo">
+    <span id="c-title">-</span><span id="c-status" class="badge">-</span>
+    <a class="link" href="/index.html" style="margin-left:.9rem">픽셀 오피스 →</a>
+    <a class="link" href="/files.html" style="margin-left:.7rem">파일 탐색기 →</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="pick" id="pick"></div>
+  <div class="cols">
+    <div>
+      <div class="card">
+        <div class="who">
+          <span class="ava" id="ava">🧑</span>
+          <span><span class="nm" id="nm">-</span> <span class="en" id="en"></span></span>
+        </div>
+        <dl class="kv" id="kv"></dl>
+      </div>
+      <div class="card">
+        <h3>이 역할이 맡은 단계
+          <span class="act">
+            <button class="btn warn" id="retry" title="이 단계만 다시 시킨다">↻ 재요청</button>
+          </span>
+        </h3>
+        <div id="steps"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>만든 파일 <span class="act"><a class="btn" id="browse" href="/files.html">탐색기에서 보기</a></span></h3>
+        <div class="files" id="files"></div>
+      </div>
+      <div class="card">
+        <h3>주고받은 메시지</h3>
+        <ul class="msgs" id="msgs"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewer">
+  <div class="box">
+    <div class="top">
+      <code id="v-path"></code>
+      <span class="vmsg" id="v-msg"></span>
+      <button class="btn primary" id="v-save">저장</button>
+      <button class="btn" id="v-close">닫기</button>
+    </div>
+    <textarea id="v-body" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<script>
+const AVATAR={pm:"🧑‍💼",planner:"🧑‍🏫",sales:"🧑‍💻",sysadmin:"🧑‍🔧",designer:"🧑‍🎨",
+  frontend:"🧑‍🚀",backend:"🧑‍🍳",dba:"🧑‍🌾",security:"🧑‍✈️",qa:"🧑‍🔬",customer:"🧑"};
+const ROLES=[["pm","관리"],["planner","기획"],["sales","영업"],["sysadmin","인프라"],
+  ["designer","디자인"],["frontend","프론트"],["backend","백엔드"],["dba","DB"],
+  ["security","보안"],["qa","QA"],["customer","고객"]];
+const ST={DONE:"완료",RUNNING:"진행 중",PENDING:"대기",WAITING_HUMAN:"사람 대기",
+          FAILED:"실패",REJECTED:"반려",SKIPPED:"건너뜀"};
+const $=(i)=>document.getElementById(i);
+const esc=(s)=>String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
+let role=new URLSearchParams(location.search).get("role")||"backend";
+let D=null, openPath=null;
+
+async function draw(){
+  let r; try{ r=await (await fetch(`/api/agents/${role}`)).json(); }catch(e){ return; }
+  D=r.data;
+
+  $("pick").innerHTML=ROLES.map(([x,ko])=>
+    `<a href="?role=${x}" class="${x===role?"on":""} ${D&&x===role&&D.node.status==="up"?"up":""}">
+       <span class="dot"></span>${ko}<span class="en" style="font-size:.82rem;color:var(--dim)">${x}</span></a>`).join("");
+
+  const c=D.cycle;
+  $("c-title").textContent=c?`사이클 #${c.id} · ${c.pipeline}`:"사이클 없음";
+  $("c-status").textContent=c?c.status:"-"; $("c-status").className="badge "+(c?c.status:"");
+
+  $("ava").textContent=AVATAR[role]||"🧑";
+  $("nm").textContent=D.display_name; $("en").textContent=role;
+
+  const n=D.node, sp=D.spec;
+  $("kv").innerHTML=[
+    ["노드", `${n.status==="up"?"🟢 살아 있음":"⚫ 응답 없음"} · ${esc(n.dgx_host||"-")}`],
+    ["A2A 주소", `<code>${esc(n.a2a_url||"-")}</code>`],
+    ["AGENT.md", sp
+      ? `${sp.status==="customized"?"✅ 학생이 수정함":"⏳ 초안"} ·
+         <code>${esc(sp.path)}</code>
+         <a class="btn" style="padding:.2rem .6rem;margin-left:.4rem" href="/edit.html?role=${role}">편집</a>`
+      : "아직 없음 (S2 에서 생성)"],
+    ["지금 하는 일", D.current
+      ? `<b>${D.current.key} ${esc(D.current.name)}</b>` : "대기 중"],
+  ].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+
+  $("steps").innerHTML=(D.steps||[]).map(s=>`
+    <div class="stp ${s.status}">
+      <span class="k">${s.key}</span>
+      <span>${esc(s.name)}
+        <div class="sub">${s.task?esc(s.task):""}${s.with&&s.with.length?` · 함께: ${s.with.join(", ")}`:""}${s.attempt>1?` · ${s.attempt}회차`:""}</div></span>
+      <span class="st">${ST[s.status]||s.status}</span>
+      ${s.error?`<span class="err">${esc(s.error)}</span>`:""}
+    </div>`).join("")||`<div style="color:var(--dim)">이 사이클에서 맡은 단계가 없습니다.</div>`;
+
+  const files=[...(D.artifacts||[]),
+               ...(D.reports||[]).map(x=>({path:x.path,name:x.name,step:x.step}))];
+  $("files").innerHTML=files.length?files.map(f=>
+    `<a href="#" onclick="openFile('${encodeURI(f.path)}');return false">
+       <span class="stepk">${f.step||"-"}</span>
+       <span class="nm">${esc(f.name)}</span>
+       <span style="color:var(--dim);font-size:.85rem">보기·수정</span></a>`).join("")
+    : `<div style="color:var(--dim);padding:.4rem">아직 만든 파일이 없습니다.</div>`;
+  $("browse").href = D.cycle ? `/files.html?path=runs/${D.cycle.id}` : "/files.html";
+
+  $("msgs").innerHTML=(D.messages||[]).slice().reverse().map(m=>
+    `<li class="${m.kind}"><span class="w">${esc(m.from)}→${esc(m.to)}</span>
+      <span>${esc(m.summary||"")}</span></li>`).join("")
+    ||`<li style="color:var(--dim)">메시지가 없습니다.</li>`;
+
+  $("retry").disabled = !D.cycle || D.cycle.status==="RUNNING";
+  $("retry").title = D.cycle && D.cycle.status==="RUNNING"
+    ? "사이클이 돌고 있습니다. 픽셀 오피스에서 일시정지한 뒤 눌러주세요."
+    : "이 역할의 마지막 단계를 다시 시킨다";
+}
+
+async function openFile(path){
+  openPath=decodeURI(path);
+  $("v-path").textContent=openPath; $("v-msg").textContent="";
+  $("v-body").value="불러오는 중...";
+  $("viewer").classList.add("on");
+  const r=await fetch(`/api/files?path=${encodeURIComponent(openPath)}`);
+  $("v-body").value = r.ok ? await r.text() : "(읽을 수 없습니다)";
+}
+$("v-close").onclick=()=>$("viewer").classList.remove("on");
+$("viewer").onclick=(e)=>{ if(e.target.id==="viewer") $("viewer").classList.remove("on"); };
+$("v-save").onclick=async()=>{
+  const r=await fetch(`/api/files?path=${encodeURIComponent(openPath)}`,
+    {method:"PUT",headers:{"Content-Type":"text/plain"},body:$("v-body").value});
+  $("v-msg").textContent = r.ok ? "저장했습니다" : "저장 실패";
+  $("v-msg").style.color = r.ok ? "var(--ok)" : "var(--bad)";
+};
+
+$("retry").onclick=async()=>{
+  if(!confirm(`${D.display_name} 에게 마지막 단계를 다시 시킵니다.\n그 단계의 기존 산출물은 지워집니다. 계속할까요?`)) return;
+  const r=await fetch(`/api/agents/${role}/retry`,{method:"POST"});
+  const j=await r.json().catch(()=>({}));
+  alert(r.ok ? (j.data?.note||"재요청했습니다") : (j.detail||"재요청 실패"));
+  draw();
+};
+
+draw();
+setInterval(draw,3000);
+</script>
+</body>
+</html>

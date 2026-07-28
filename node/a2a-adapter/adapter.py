@@ -215,6 +215,13 @@ def run_hermes(workdir: Path, prompt: str, timeout: int) -> tuple[bool, str]:
         return False, f"Hermes 를 찾을 수 없다: {HERMES}"
 
 
+# 산출물로 걷지 않을 것 — 의존성·빌드 찌꺼기. 수백~수천 개가 딸려온다.
+SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv",
+             "dist", "build", ".next", ".cache", "vendor", ".pytest_cache"}
+SKIP_EXT = {".pyc", ".pyo", ".so", ".o", ".class", ".lock"}
+MAX_FILES = 60
+
+
 def collect(outdir: Path) -> list[dict]:
     arts = []
     if not outdir.exists():
@@ -222,6 +229,12 @@ def collect(outdir: Path) -> list[dict]:
     for p in sorted(outdir.rglob("*")):
         if not p.is_file():
             continue
+        if any(part in SKIP_DIRS for part in p.relative_to(outdir).parts):
+            continue
+        if p.suffix.lower() in SKIP_EXT:
+            continue
+        if len(arts) >= MAX_FILES:
+            break
         try:
             body = p.read_text(encoding="utf-8", errors="replace")
         except Exception:

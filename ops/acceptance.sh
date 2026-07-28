@@ -173,6 +173,12 @@ phase3() {
     ng "상태기계 단위 테스트 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-orch.log
   fi
 
+  if "$PY_BIN" core/tests/test_verdict.py >/tmp/agora-verdict.log 2>&1; then
+    ok "게이트 판정 파서 $(grep -c '✅' /tmp/agora-verdict.log)건 통과 (인수 #19)"
+  else
+    ng "게이트 판정 파서 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-verdict.log
+  fi
+
   if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then
     ng "HQ 가 떠 있지 않다 (make dev 로 먼저 띄워라)"; return
   fi

@@ -62,10 +62,21 @@ done
 printf '   %s %s\n' "$(el)" "$(state)"
 
 say "3. 학생 11명이 AGENT.md 를 고쳐 저장한다"
+# front-matter 만 떼고 본문은 통째로 보존한다.
+# sed '1,/^---$/d' 를 두 번 쓰면 본문까지 지워진다 — 실제로 겪었다.
+cat > /tmp/agora-strip.py <<'STRIP'
+import re, sys
+role = sys.argv[1]
+t = sys.stdin.read()
+body = re.sub(r"^---\n.*?\n---\n", "", t, count=1, flags=re.S).strip()
+print(body)
+print()
+print("## 학생이 보강한 규칙")
+print(f"- {role} 로서 이번 요구사항(밀밭제과 예약 주문)에서 특히 조심할 것을 적었다.")
+STRIP
+
 for r in "${ROLES[@]}"; do
-  cur=$(curl -sf "$HQ/api/specs/$r/raw" | sed '1,/^---$/d' | sed '1,/^---$/d')
-  printf '%s\n\n## 학생이 보강한 규칙\n- %s 로서 이번 요구사항(밀밭제과 예약 주문)에서 특히 조심할 것을 적었다.\n' \
-    "$cur" "$r" > /tmp/agora-spec.md
+  curl -sf "$HQ/api/specs/$r/raw" | "$PY" /tmp/agora-strip.py "$r" > /tmp/agora-spec.md
   n=$(curl -s -X PUT "$HQ/api/specs/$r/raw" -H 'Content-Type: text/plain' \
       --data-binary @/tmp/agora-spec.md \
       | "$PY" -c "import json,sys; d=json.load(sys.stdin)['data']; print(f\"{d['customized']}/{d['total']}\" + (' ★자동재개' if d.get('resumed') else ''))" 2>/dev/null)

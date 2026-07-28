@@ -53,14 +53,15 @@ function drawDesks(d) {
     const badge = spec
       ? `<div class="spec ${spec}">${spec === "customized" ? "✅ AGENT.md" : "⏳ AGENT.md 대기"}</div>`
       : "";
-    return `<div class="desk ${n.status} ${n.busy ? "busy" : ""}">
+    return `<a class="desk ${n.status} ${n.busy ? "busy" : ""}"
+      href="/agent.html?role=${n.role}" title="${n.display_name} 상세 보기">
       <span class="dot"></span>
       <div class="avatar">${AVATAR[n.role] || "🧑"}</div>
       <div class="role">${n.display_name}</div>
       <div class="en">${n.role}</div>
       <div class="host">${n.dgx_host || "-"}</div>
       ${badge}
-    </div>`;
+    </a>`;
   }).join("");
 
   const s = d.specs;
@@ -99,6 +100,21 @@ function drawMessages(d) {
       <span>${m.summary || ""}</span>
     </li>`).join("");
   if (msgs.length) lastMsgId = msgs[msgs.length - 1].id;
+}
+
+/* 에이전트들이 만들어낸 실제 웹사이트 — 배포 결과물을 바로 열어 본다 */
+async function drawSites() {
+  const el = $("sites");
+  if (!el) return;
+  try {
+    const { body } = await api("/preview/sites");
+    const list = (body && body.data) || [];
+    el.innerHTML = `<div class="hd">완성된 사이트</div>` + (list.length
+      ? list.slice(0, 4).map(s =>
+          `<a href="${s.url}" target="_blank" rel="noopener">🌐 ${s.role || s.step || "site"}
+             <span class="sub">${s.files}개 · ${Math.round(s.size / 1024)}KB</span></a>`).join("")
+      : `<div class="none">아직 만들어진 사이트가 없습니다.</div>`);
+  } catch (e) {}
 }
 
 function drawOrders(d) {
@@ -153,7 +169,7 @@ async function tick() {
     CUR = body.data;
     trackRewind(CUR);
     drawHeader(CUR); drawDesks(CUR); drawRooms(CUR);
-    drawMessages(CUR); drawOrders(CUR); drawTimeline(CUR);
+    drawMessages(CUR); drawOrders(CUR); drawTimeline(CUR); drawSites();
   } catch (e) { /* 폴링은 절대 죽지 않는다 */ }
 }
 
