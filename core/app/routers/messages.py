@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import services
+from .. import auth, services
 from ..db import get_db
 from ..models import Message
 
@@ -29,8 +29,10 @@ class MessageMirror(BaseModel):
 
 
 @router.post("")
-async def mirror_message(body: MessageMirror, db: Session = Depends(get_db)):
+async def mirror_message(body: MessageMirror, db: Session = Depends(get_db),
+                         x_agora_token: str | None = Header(None, alias="X-Agora-Token")):
     """노드↔노드 직접 A2A 도 여기에 미러링돼야 한다 (인수 #9)."""
+    auth.verify(body.from_role, x_agora_token)
     services.mirror(db, body.cycle_id, body.from_role, body.to_role,
                     body.kind, body.summary or "", body.payload_ref)
     services.audit(db, body.from_role, "message.mirror",

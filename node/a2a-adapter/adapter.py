@@ -35,7 +35,9 @@ from pathlib import Path
 
 # ── 설정 ───────────────────────────────────────────────────────────────
 HOME = Path.home()
-NODE_ENV = HOME / "agora" / "node.env"
+# 노드 디렉터리. dgx-12 는 ~/agora 가 HQ 리포라서 겹치므로 따로 지정할 수 있게 한다.
+NODE_DIR = Path(os.getenv("AGORA_NODE_DIR", str(HOME / "agora")))
+NODE_ENV = NODE_DIR / "node.env"
 
 
 def load_env() -> dict[str, str]:
@@ -56,7 +58,7 @@ NODE_ID = os.getenv("AGORA_NODE_ID", ENV.get("AGORA_NODE_ID", "unknown"))
 DISPLAY = ENV.get("AGORA_DISPLAY_NAME", ROLE)
 HQ = os.getenv("AGORA_HQ_URL", ENV.get("AGORA_HQ_URL", "http://220.67.5.62:8000"))
 MODEL = ENV.get("AGORA_MODEL", "gpt-oss:120b")
-WORKROOT = Path(ENV.get("AGORA_WORKSPACE", str(HOME / "agora" / "workspace")))
+WORKROOT = Path(ENV.get("AGORA_WORKSPACE", str(NODE_DIR / "workspace")))
 HERMES = str(HOME / ".local" / "bin" / "hermes")
 
 # 산출물 하나가 이보다 크면 잘라서 보낸다 (교실 네트워크 보호)
@@ -65,13 +67,18 @@ MAX_ARTIFACT_BYTES = 256 * 1024
 TASKS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
+# HQ 가 발급하는 노드 토큰 (인수 #10). 기동 시 한 번 받아 온다.
+TOKEN: str = ""
+
 
 # ── HQ 통신 ────────────────────────────────────────────────────────────
 def http_json(url: str, payload: dict | None = None, timeout: int = 15):
     data = json.dumps(payload).encode() if payload is not None else None
+    headers = {"Content-Type": "application/json"}
+    if TOKEN:
+        headers["X-Agora-Token"] = TOKEN
     req = urllib.request.Request(
-        url, data=data,
-        headers={"Content-Type": "application/json"},
+        url, data=data, headers=headers,
         method="POST" if data is not None else "GET",
     )
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -379,6 +386,21 @@ class Handler(BaseHTTPRequestHandler):
                     "error": {"code": -32601, "message": f"모르는 메서드: {method}"}})
 
 
+def fetch_token() -> None:
+    """HQ 에서 자기 토큰을 받아 온다 (인수 #10)."""
+    global TOKEN
+    for _ in range(3):
+        try:
+            r = http_json(f"{HQ}/api/nodes/{ROLE}/token", timeout=10)
+            TOKEN = (r.get("data") or {}).get("token", "")
+            if TOKEN:
+                print(f"[adapter] 토큰 수령 ({TOKEN[:8]}…)", flush=True)
+                return
+        except Exception as e:
+            print(f"[adapter] 토큰 수령 실패: {e}", flush=True)
+            time.sleep(3)
+
+
 def register(port: int) -> None:
     """HQ 에 자기 자신을 등록한다 (인수 #5·#6)."""
     import socket
@@ -420,7 +442,9 @@ def main() -> None:
     WORKROOT.mkdir(parents=True, exist_ok=True)
     print(f"[adapter] role={ROLE} node={NODE_ID} hq={HQ} model={MODEL}", flush=True)
 
-    threading.Thread(target=lambda: (time.sleep(1), register(a.port)), daemon=True).start()
+    threading.Thread(
+        target=lambda: (time.sleep(1), fetch_token(), register(a.port)),
+        daemon=True).start()
     threading.Thread(target=heartbeat_loop, daemon=True).start()
 
     srv = ThreadingHTTPServer(("0.0.0.0", a.port), Handler)

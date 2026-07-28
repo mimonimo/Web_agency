@@ -146,6 +146,23 @@ not_yet() { head_ "$1"; printf '  ⏭  아직 구현하지 않았다\n'; }
 HQ="${HQ:-http://127.0.0.1:8000}"
 PY_BIN="$ROOT/.venv/bin/python"
 
+nodes_up() {
+  curl -sf "$HQ/api/nodes" 2>/dev/null | "$PY_BIN" -c "
+import json,sys
+try: print(sum(1 for x in json.load(sys.stdin)['data'] if x['status']=='up'))
+except Exception: print(0)" 2>/dev/null || echo 0
+}
+
+wait_nodes() {
+  # DB 를 새로 만들면 하트비트(30초 주기)가 올 때까지 노드가 down 으로 보인다.
+  local want="${1:-10}" limit="${2:-50}" i=0
+  while [ "$i" -lt "$limit" ]; do
+    [ "$(nodes_up)" -ge "$want" ] && return 0
+    sleep 2; i=$((i+2))
+  done
+  return 1
+}
+
 phase3() {
   head_ "Phase 3 — 오케스트레이터 (인수 11–25)"
   if [ ! -x "$PY_BIN" ]; then ng "venv 가 없다 (python3 -m venv .venv)"; return; fi
@@ -161,10 +178,25 @@ phase3() {
   fi
   ok "HQ 가 응답한다 ($HQ/api/health)"
 
+  ex=$(curl -sf "$HQ/api/health" | "$PY_BIN" -c "
+import json,sys; print(json.load(sys.stdin)['data'].get('executor','?'))" 2>/dev/null)
+  if [ "$ex" != "sim" ]; then
+    printf '  ⏭  E2E 흐름·편집 테스트는 EXECUTOR=sim 에서만 돈다 (현재 %s).\n' "$ex"
+    printf '     실제 노드는 한 단계에 수십 초가 걸려 테스트 대기시간을 넘긴다.\n'
+    printf '     확인하려면: .env 에서 EXECUTOR=sim 으로 바꾸고 make dev-stop && make dev\n'
+    return
+  fi
+
   if "$PY_BIN" core/tests/test_flow.py "$HQ" >/tmp/agora-flow.log 2>&1; then
     ok "E2E 흐름 테스트 $(grep -c '✅' /tmp/agora-flow.log)건 통과"
   else
     ng "E2E 흐름 테스트 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-flow.log
+  fi
+
+  if "$PY_BIN" core/tests/test_edit.py "$HQ" >/tmp/agora-edit.log 2>&1; then
+    ok "★ 학생 편집 흐름 테스트 $(grep -c '✅' /tmp/agora-edit.log)건 통과 (인수 #14·#15)"
+  else
+    ng "학생 편집 흐름 테스트 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-edit.log
   fi
 }
 
@@ -174,7 +206,7 @@ phase4() {
     ng "HQ 가 떠 있지 않다"; return
   fi
 
-  for f in /index.html /order.html /board.html /assets/office.css /assets/office.js; do
+  for f in /index.html /order.html /board.html /edit.html /assets/office.css /assets/office.js; do
     code=$(curl -s -o /dev/null -w '%{http_code}' "$HQ$f")
     [ "$code" = "200" ] && ok "$f 200" || ng "$f → $code"
   done
@@ -201,9 +233,8 @@ sys.exit(1 if missing else 0)"; then
   fi
 
   # 노드 11개 · 하트비트 (인수 #5·#7·#27)
-  n_up=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
-import json,sys; d=json.load(sys.stdin)['data']
-print(sum(1 for x in d if x['status']=='up'))" 2>/dev/null || echo 0)
+  wait_nodes 10 50 || true
+  n_up=$(nodes_up)
   n_all=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
 import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0)
   [ "$n_all" = "11" ] && ok "노드 11개가 등록돼 있다 (인수 #5)" || ng "노드 $n_all 개"
@@ -224,17 +255,123 @@ import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0
   grep -q "spec-counter" web/assets/office.js \
     && ok "커스터마이징 게이트 카운터(7/11)가 구현돼 있다 (인수 #30)" \
     || ng "스펙 카운터가 없다"
+
+  # ★ 학생이 실제로 고칠 수 있는가 — 이게 없으면 수업이 성립하지 않는다
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$HQ/api/specs/backend/raw" \
+         -H 'Content-Type: text/plain' --data-binary '   ')
+  [ "$code" = "400" ] || [ "$code" = "404" ] \
+    && ok "★ 학생 편집 API(PUT /api/specs/{role}/raw)가 살아 있다" \
+    || ng "학생 편집 API 응답이 이상하다 ($code)"
+  grep -q "PUT" web/edit.html && ok "편집 페이지가 저장 요청을 보낸다" \
+    || ng "편집 페이지에 저장 기능이 없다"
+}
+
+phase2() {
+  head_ "Phase 2 — 노드 · A2A (인수 5–10)"
+  if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then ng "HQ 가 떠 있지 않다"; return; fi
+
+  n_all=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
+import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null || echo 0)
+  [ "$n_all" = "11" ] && ok "노드 11개 등록 (인수 #5)" || ng "노드 $n_all 개"
+
+  # 인수 #6 — HQ 가 각 노드의 에이전트 카드를 조회한다
+  cards=$(curl -sf "$HQ/api/nodes" | "$PY_BIN" -c "
+import json,sys,urllib.request
+n=0
+for x in json.load(sys.stdin)['data']:
+    try:
+        u=x['a2a_url'].rstrip('/')+'/.well-known/agent-card.json'
+        c=json.load(urllib.request.urlopen(u, timeout=5))
+        if c.get('name')==f\"agora-{x['role']}\": n+=1
+    except Exception: pass
+print(n)" 2>/dev/null || echo 0)
+  [ "$cards" -ge 10 ] && ok "에이전트 카드 $cards/11 조회 성공 (인수 #6)" \
+                      || ng "카드 조회 $cards/11"
+
+  # 인수 #7 — 하트비트로 up (최대 50초 기다린다)
+  wait_nodes 10 50 || true
+  n_up=$(nodes_up)
+  [ "$n_up" -ge 10 ] && ok "노드 $n_up/11 하트비트 정상 (인수 #7)" || ng "up 노드 $n_up 개"
+
+  # 인수 #10 — 잘못된 토큰 → 401
+  tok=$(curl -sf "$HQ/api/nodes/backend/token" | "$PY_BIN" -c "
+import json,sys; print(json.load(sys.stdin)['data']['token'])" 2>/dev/null)
+  good=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HQ/api/nodes/backend/heartbeat" \
+         -H "X-Agora-Token: $tok")
+  bad=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HQ/api/nodes/backend/heartbeat" \
+        -H "X-Agora-Token: definitely-wrong")
+  spoof=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$HQ/api/messages" \
+          -H 'Content-Type: application/json' -H "X-Agora-Token: $tok" \
+          -d '{"from_role":"qa","to_role":"hq","kind":"mirror","summary":"사칭"}')
+  [ "$good" = "200" ] && ok "올바른 토큰 → 200" || ng "올바른 토큰 → $good"
+  [ "$bad"  = "401" ] && ok "★ 잘못된 토큰 → 401 (인수 #10)" || ng "잘못된 토큰 → $bad"
+  [ "$spoof" = "401" ] && ok "★ 남의 역할 사칭 미러링 → 401" || ng "사칭 → $spoof"
+
+  # 인수 #9 — 미러링된 메시지가 남아 있다
+  mirrored=$("$PY_BIN" -c "
+import json,urllib.request
+d=json.load(urllib.request.urlopen('$HQ/api/messages?limit=100'))['data']
+roles={m['from'] for m in d} - {'hq'}
+print(len(roles))" 2>/dev/null || echo 0)
+  [ "$mirrored" -ge 1 ] && ok "노드가 보낸 메시지가 미러링돼 있다 (인수 #9, $mirrored 역할)" \
+                        || ng "미러링된 노드 메시지가 없다"
+}
+
+phase5() {
+  head_ "Phase 5 — 부트스트랩 · 운영 (인수 33–36)"
+  want_exec node/bootstrap-node.sh
+  want_exec node/verify-node.sh
+  want_exec ops/reset.sh
+  want_exec ops/autostart.sh
+  want_file node/a2a-adapter/adapter.py
+
+  # 인수 #36 — 재부팅 자동 기동이 등록돼 있는가
+  if crontab -l 2>/dev/null | grep -q 'ops/dev.sh start'; then
+    ok "★ HQ 재부팅 자동 기동이 등록돼 있다 (인수 #36)"
+  else
+    ng "재부팅 자동 기동 미등록 (ops/autostart.sh install)"
+  fi
+
+  # 노드 어댑터도 @reboot 로 살아나는가
+  if [ -x "$HOME/agora-ops/dgx-fan.sh" ]; then
+    n=$(echo 'crontab -l 2>/dev/null | grep -c "agora/adapter.py"' \
+        | "$HOME/agora-ops/dgx-fan.sh" 2>/dev/null | grep -cx '1')
+    [ "$n" -ge 10 ] && ok "노드 $n/10 이 어댑터 자동 기동 등록됨" \
+                    || ng "어댑터 자동 기동 등록 노드 $n 개"
+  fi
+
+  # 인수 #33 — bootstrap 이 멱등한가 (node.env 해시가 안 바뀐다)
+  if [ -x "$HOME/agora-ops/dgx-fan.sh" ]; then
+    h1=$(echo 'md5sum ~/agora/node.env 2>/dev/null | cut -c1-8' \
+         | "$HOME/agora-ops/dgx-fan.sh" dgx-07 2>/dev/null | tail -1)
+    echo '~/agora/bootstrap-node.sh --role backend --hq http://220.67.5.62:8000 --dgx dgx-07' \
+      | "$HOME/agora-ops/dgx-fan.sh" dgx-07 >/dev/null 2>&1
+    h2=$(echo 'md5sum ~/agora/node.env 2>/dev/null | cut -c1-8' \
+         | "$HOME/agora-ops/dgx-fan.sh" dgx-07 2>/dev/null | tail -1)
+    [ -n "$h1" ] && [ "$h1" = "$h2" ] \
+      && ok "★ bootstrap-node.sh 2회 실행이 멱등하다 (인수 #33)" \
+      || ng "bootstrap 이 멱등하지 않다 ($h1 → $h2)"
+
+    # 인수 #34 — verify-node 가 4항목을 각각 판정
+    v=$(echo '~/agora/verify-node.sh' | "$HOME/agora-ops/dgx-fan.sh" dgx-07 2>/dev/null)
+    c=$(echo "$v" | grep -cE '^\[[1-4]\]')
+    [ "$c" -eq 4 ] && ok "★ verify-node.sh 가 4항목을 각각 판정한다 (인수 #34)" \
+                   || ng "verify-node 판정 항목이 $c 개"
+    echo "$v" | grep -q "결과.*PASS" && ok "dgx-07 노드 판정 PASS" || ng "dgx-07 판정 실패"
+  fi
 }
 
 case "$PHASE" in
   0)   phase0 ;;
+  2)   phase2 ;;
   3)   phase3 ;;
   4)   phase4 ;;
+  5)   phase5 ;;
   all) phase0
-       phase3
+       phase3        # 먼저 사이클을 돌려야 메시지·산출물이 생긴다
+       phase2
        phase4
-       not_yet "Phase 2 — 노드 A2A 어댑터 (인수 8–10)"
-       not_yet "Phase 5 — 노드 부트스트랩 (인수 33–36)" ;;
+       phase5 ;;
   *)   echo "아직 없는 Phase: $PHASE" >&2; exit 2 ;;
 esac
 

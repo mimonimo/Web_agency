@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -53,6 +53,51 @@ async def get_spec_raw(role: str, cycle: int | None = Query(None),
     if not p.exists():
         raise HTTPException(404, f"{role} 의 AGENT.md 가 아직 없다 (S2 에서 생성된다)")
     return p.read_text(encoding="utf-8")
+
+
+@router.put("/{role}/raw")
+async def put_spec_raw(role: str, body: str = Body(..., media_type="text/plain"),
+                       db: Session = Depends(get_db)):
+    """★ 학생이 자기 AGENT.md 를 고쳐 저장하는 주소.
+
+    web/edit.html 이 이걸 부른다. 저장하면 HQ 가 곧바로 스캔해
+    `status: customized` 로 바꾸고, 11개가 다 차면 사이클이 자동 재개된다 (인수 #14·#15).
+
+    front-matter 는 HQ 가 관리한다 — 학생이 지웠거나 고쳤어도 원래 것으로 되돌린다.
+    """
+    from ..models import ROLES
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+
+    p = services.spec_path(role)
+    if not p.exists():
+        raise HTTPException(404, f"{role} 의 AGENT.md 가 아직 없다 (S2 에서 생성된다)")
+    if not body or not body.strip():
+        raise HTTPException(400, "빈 내용은 저장할 수 없다")
+
+    old = p.read_text(encoding="utf-8")
+    fm = ""
+    if old.startswith("---"):
+        parts = old.split("---", 2)
+        if len(parts) > 2:
+            fm = "---" + parts[1] + "---\n\n"
+
+    new_body = body
+    if new_body.lstrip().startswith("---"):      # 학생이 머리말째 붙여넣었으면 떼어낸다
+        parts = new_body.split("---", 2)
+        new_body = parts[2] if len(parts) > 2 else new_body
+
+    p.write_text(fm + new_body.strip() + "\n", encoding="utf-8")
+    services.audit(db, role, "spec.edit", f"specs:{role}", {"bytes": len(new_body)})
+    db.commit()
+
+    c = _latest_cycle(db)
+    if c is None:
+        return {"ok": True, "data": {"saved": True}}
+    services.scan_customized(db, c)
+    r = await _maybe_resume(db, c)
+    r["data"]["saved"] = True
+    return r
 
 
 @router.post("/{role}/customized")

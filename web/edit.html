@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGENT.md 편집 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{max-width:900px;margin:1.2rem auto;padding:0 1rem}
+  .pick{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:1rem}
+  .pick a{border:1px solid var(--line);border-radius:5px;padding:.35rem .6rem;
+          font-size:.82rem;text-decoration:none;color:var(--fg);background:#111621}
+  .pick a.on{border-color:var(--run);background:#1b2740;font-weight:700}
+  .pick a .st{font-size:.68rem;margin-left:.3rem}
+  .pick a .st.customized{color:var(--ok)} .pick a .st.draft{color:var(--wait)}
+  .head{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.5rem;flex-wrap:wrap}
+  .head h1{margin:0;font-size:1.15rem}
+  .head .path{color:var(--dim);font-size:.75rem;font-family:ui-monospace,monospace}
+  textarea{width:100%;height:56vh;background:#0f131b;color:var(--fg);
+           border:1px solid var(--line);border-radius:8px;padding:.9rem;
+           font-family:ui-monospace,"D2Coding",monospace;font-size:.86rem;line-height:1.55;
+           resize:vertical}
+  .bar2{display:flex;align-items:center;gap:.6rem;margin-top:.7rem;flex-wrap:wrap}
+  .bar2 button{background:var(--run);color:#0d1017;border:0;border-radius:6px;
+               padding:.6rem 1.3rem;font-weight:700;cursor:pointer;font-family:inherit;
+               font-size:.92rem}
+  .bar2 button.ghost{background:#1e2635;color:var(--fg);border:1px solid var(--line);font-weight:400}
+  .msg{font-size:.84rem}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--bad)} .msg.dim{color:var(--dim)}
+  .hint{background:#151a24;border:1px solid var(--line);border-radius:8px;
+        padding:.7rem .9rem;font-size:.8rem;color:var(--dim);margin-bottom:.9rem}
+  .hint b{color:var(--fg)}
+  .counter{margin-left:auto;font-size:.85rem}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">AGORA<span>Web</span></div>
+  <div class="cycleinfo">
+    <span id="cnt" class="counter">-</span>
+    <a class="link" href="/index.html" style="margin-left:1rem">픽셀 오피스 →</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hint">
+    <b>여기가 오늘 수업의 핵심입니다.</b> 기획 에이전트가 만든 초안에
+    <b>내 전문 지식을 더해</b> 고치세요. 특히 <b>금지</b> 칸에
+    "이 역할이 이번 요구사항에서 조심해야 할 것"을 구체적으로 적으면
+    결과가 눈에 띄게 달라집니다. 저장하면 내 책상에 ✅ 가 켜지고,
+    11명이 다 저장하면 사이클이 자동으로 다시 굴러갑니다.
+  </div>
+
+  <div class="pick" id="pick"></div>
+
+  <div class="head">
+    <h1 id="title">역할을 고르세요</h1>
+    <span class="path" id="path"></span>
+  </div>
+
+  <textarea id="ed" spellcheck="false" placeholder="역할을 고르면 내용이 나옵니다"></textarea>
+
+  <div class="bar2">
+    <button id="save">저장</button>
+    <button id="reload" class="ghost">불러오기</button>
+    <span id="msg" class="msg dim"></span>
+  </div>
+</div>
+
+<script>
+const ROLES = [
+  ["pm","관리"],["planner","기획"],["sales","영업"],["sysadmin","인프라"],
+  ["designer","디자인"],["frontend","프론트엔드"],["backend","백엔드"],["dba","DB"],
+  ["security","보안"],["qa","QA"],["customer","고객"],
+];
+const $ = (id) => document.getElementById(id);
+let role = new URLSearchParams(location.search).get("role") || "";
+let dirty = false;
+
+function setMsg(kind, text) { $("msg").className = "msg " + kind; $("msg").textContent = text; }
+
+async function drawPicker() {
+  let states = {}, cnt = "";
+  try {
+    const d = (await (await fetch("/api/specs")).json()).data;
+    states = d.by_role || {};
+    if (d.total) {
+      cnt = `AGENT.md ${d.customized} / ${d.total}`;
+      $("cnt").textContent = cnt;
+      $("cnt").style.color = d.customized >= d.total ? "var(--ok)" : "var(--wait)";
+    }
+  } catch (e) {}
+  $("pick").innerHTML = ROLES.map(([r, ko]) => {
+    const st = states[r];
+    const mark = st === "customized" ? "✅" : (st ? "⏳" : "");
+    return `<a href="?role=${r}" class="${r === role ? "on" : ""}">${ko}
+      <span style="opacity:.6">${r}</span><span class="st ${st || ''}">${mark}</span></a>`;
+  }).join("");
+}
+
+async function load() {
+  if (!role) return;
+  $("title").textContent = (ROLES.find(x => x[0] === role) || [])[1] + " — AGENT.md";
+  $("path").textContent = `repo/project-001/agents/${role}/AGENT.md`;
+  setMsg("dim", "불러오는 중...");
+  const r = await fetch(`/api/specs/${role}/raw`);
+  if (!r.ok) { setMsg("err", "아직 초안이 만들어지지 않았습니다 (S2 단계에서 생성됩니다)"); return; }
+  let t = await r.text();
+  // front-matter 는 HQ 가 관리한다. 학생에게는 본문만 보여준다.
+  if (t.startsWith("---")) { const p = t.split("---", 3); t = p.length > 2 ? p[2] : t; }
+  $("ed").value = t.replace(/^\n+/, "");
+  dirty = false;
+  setMsg("dim", "불러왔습니다. 고친 뒤 저장을 누르세요.");
+}
+
+$("save").onclick = async () => {
+  if (!role) return setMsg("err", "역할을 먼저 고르세요");
+  const body = $("ed").value;
+  if (!body.trim()) return setMsg("err", "빈 내용은 저장할 수 없습니다");
+  setMsg("dim", "저장 중...");
+  const r = await fetch(`/api/specs/${role}/raw`, {
+    method: "PUT", headers: { "Content-Type": "text/plain" }, body,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return setMsg("err", j.detail || "저장 실패");
+  dirty = false;
+  const d = j.data || {};
+  setMsg("ok", `저장했습니다. ${d.customized ?? "?"}/${d.total ?? "?"} 완료`
+              + (d.resumed ? " — 전원 완료! 사이클이 다시 굴러갑니다 🎉" : ""));
+  drawPicker();
+};
+
+$("reload").onclick = () => {
+  if (dirty && !confirm("고친 내용이 사라집니다. 계속할까요?")) return;
+  load();
+};
+$("ed").addEventListener("input", () => { dirty = true; });
+window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
+
+drawPicker();
+load();
+setInterval(drawPicker, 5000);
+</script>
+</body>
+</html>
