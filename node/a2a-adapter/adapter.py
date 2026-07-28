@@ -175,7 +175,7 @@ def build_prompt(spec: str, params: dict, ctx: dict[str, str], outdir: Path) -> 
         parts.append("## 참고 자료")
         for name, body in ctx.items():
             parts.append(f"### {name}")
-            parts.append(body[:8000])
+            parts.append(body[:20000])
             parts.append("")
 
     parts += [
@@ -185,7 +185,8 @@ def build_prompt(spec: str, params: dict, ctx: dict[str, str], outdir: Path) -> 
     if outputs:
         names = ", ".join(o for o in outputs if "*" not in o)
         if names:
-            parts.append(f"- `output/` 아래 이 파일들을 만든다: {names}")
+            parts.append(f"- `output/` 아래 이 파일들을 **전부** 만든다: {names}")
+            parts.append("  하나라도 빠지면 다음 단계가 막힌다.")
     parts += [
         "- 각 파일은 실제로 쓸 수 있는 내용이어야 한다. 자리표시자만 넣지 마라.",
         "- 다 끝나면 `report.md` 에 무엇을 만들었고 남은 이슈가 무엇인지 적는다.",
@@ -286,6 +287,10 @@ def work(task_id: str, params: dict) -> None:
                 ctx[url.rsplit("/", 1)[-1]] = http_text(url, timeout=20)
             except Exception:
                 pass
+
+        if params.get("context_urls") and not ctx:
+            mirror("hq", "response",
+                   f"{step} 참고 자료를 하나도 못 받았다 — 결과 품질이 떨어진다", cyc)
 
         prompt = build_prompt(spec, params, ctx, outdir)
         (workdir / "prompt.txt").write_text(prompt, encoding="utf-8")

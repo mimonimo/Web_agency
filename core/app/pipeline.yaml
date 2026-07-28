@@ -2,6 +2,10 @@
 #
 # ★ 파이프라인은 코드가 아니라 데이터다. 코드에 단계를 하드코딩하지 마라.
 #   강사가 수업 중에 단계를 자를 수 있어야 한다.
+#
+# `inputs` 는 그 단계의 에이전트가 **읽어야 할 참고 자료**다.
+# HQ 가 앞 단계 산출물에서 이름으로 찾아 노드에 실어 보낸다 (runner.resolve_inputs).
+# 여기 안 적으면 에이전트는 아무것도 못 보고 지어낸다. 실제로 그랬다.
 
 name: web_delivery
 kind: new
@@ -35,40 +39,62 @@ steps:
     name: 설계
     parallel: [designer, dba, backend, sysadmin]
     task: design
+    inputs:  [order, SRS.md, SCREENS.md, SOW.md]
     outputs: [design-tokens.json, schema.sql, api-contract.yaml, ops/run.sh]
+    # 역할마다 만들 것이 다르다. 넷이 같은 파일을 네 벌 만들면 안 된다.
+    role_outputs:
+      designer: [design-tokens.json, UI-GUIDE.md]
+      dba:      [schema.sql]
+      backend:  [api-contract.yaml]
+      sysadmin: [ops/run.sh, DEPLOY.md]
     timeout_sec: 1200
 
   - id: S5
     name: 구현
     parallel: [frontend, backend, dba]
     task: implement
+    inputs:  [order, SRS.md, SCREENS.md, design-tokens.json, api-contract.yaml, schema.sql]
+    role_outputs:
+      frontend: [index.html, style.css, app.js]
+      backend:  [server.js, README.md]
+      dba:      [seed.sql]
     timeout_sec: 1800
 
   - id: S6
     name: QA 게이트
     role: qa
     type: gate
+    inputs:  [SRS.md, index.html, app.js, api-contract.yaml]
+    outputs: [VERDICT.md]
     on_reject: { rewind_to: S5 }
 
   - id: S7
     name: 보안 게이트
     role: security
     type: gate
+    inputs:  [SRS.md, index.html, app.js, server.js, schema.sql]
+    outputs: [VERDICT.md]
     on_reject: { rewind_to: S5, priority: critical }
 
   - id: S8
     name: 고객 검수(UAT)
     role: customer
     type: gate
+    inputs:  [order, SOW.md, SRS.md, index.html]
+    outputs: [VERDICT.md]
     on_reject: { rewind_to: S2 }    # ★ 기획으로 돌아간다
 
   - id: S9
     name: 배포
     role: sysadmin
     task: deploy
+    inputs:  [index.html, server.js, ops/run.sh]
+    outputs: [DEPLOY-LOG.md]
 
   - id: S10
     name: 운영 관찰
     role: customer
     task: generate_feedback         # 문의·클레임을 만들어 새 Order 발행
+    inputs:  [order, index.html]
+    outputs: [FEEDBACK.md]
     creates_orders: true

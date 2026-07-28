@@ -53,8 +53,17 @@ class StepDef:
     allow_override: bool = False
     wait_for: str | None = None
     hint: str | None = None
+    # 역할마다 만들 것이 다르다. 넷이 같은 파일을 네 벌 만들면 안 된다.
+    role_outputs: tuple[tuple[str, tuple[str, ...]], ...] = ()
     on_reject_rewind_to: str | None = None
     on_reject_priority: str | None = None
+
+    def outputs_for(self, role: str) -> tuple[str, ...]:
+        """이 역할이 만들어야 할 파일. 지정이 없으면 단계 전체 outputs 를 쓴다."""
+        for r, outs in self.role_outputs:
+            if r == role:
+                return outs
+        return self.outputs
 
     @property
     def roles(self) -> tuple[str, ...]:
@@ -105,6 +114,8 @@ def _parse(raw: dict[str, Any]) -> Pipeline:
                 allow_override=bool(s.get("allow_override", False)),
                 wait_for=s.get("wait_for"),
                 hint=s.get("hint"),
+                role_outputs=tuple(
+                    (r, _to_tuple(v)) for r, v in (s.get("role_outputs") or {}).items()),
                 on_reject_rewind_to=on_reject.get("rewind_to"),
                 on_reject_priority=on_reject.get("priority"),
             )

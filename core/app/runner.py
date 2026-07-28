@@ -17,6 +17,7 @@ import asyncio
 import os
 import time
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any
 
 from sqlalchemy import select
@@ -25,7 +26,7 @@ from . import pipelines, services
 from .db import SessionLocal
 from .models import Cycle, CycleStatus, ROLES, Step, StepStatus
 from .orchestrator import Action, Event, next_step
-from .services import REPO_ROOT, audit, now
+from .services import PROJECT_ID, REPO_ROOT, audit, now
 
 EXECUTOR = os.getenv("EXECUTOR", "sim")
 SIM_STEP_SEC = float(os.getenv("SIM_STEP_SEC", "2.0"))
@@ -365,7 +366,9 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
         step_name=f"{role} AGENT.md 초안",
         task="draft_one_spec",
         spec_url=f"{hq}/api/specs/planner/raw",
-        context_urls=(f"{hq}/api/files?path=runs/{cycle_id}/{sdef.id}/output/SRS.md",),
+        context_urls=tuple(
+            f"{hq}/api/files?path={quote(c)}"
+            for c in resolve_inputs(cycle_id, ("SRS.md", "SCREENS.md", "SOW.md"))),
         outputs=(f"agents/{role}/AGENT.md",),
         timeout_sec=300,
         order=_order_text(cycle_id),
@@ -413,12 +416,42 @@ def _instruction(sdef: Any) -> str:
     f = TEMPLATES / f"{_task_name(sdef)}.md"
     if f.exists():
         parts.append(f.read_text(encoding="utf-8").strip())
+    # ★ 공통 품질 기준은 모든 작업에 붙인다. 이게 없으면 결과물 수준이 들쭉날쭉하다.
+    q = TEMPLATES / "_quality.md"
+    if q.exists():
+        parts.append(q.read_text(encoding="utf-8").strip())
     # ★ AGENT.md 초안을 만드는 단계에는 BRIEF §4.1 의 템플릿을 반드시 붙인다
     if sdef.emits_specs:
         pd = TEMPLATES / "planner_draft_prompt.md"
         if pd.exists():
             parts.append(pd.read_text(encoding="utf-8").strip())
     return "\n\n".join(parts)
+
+
+def resolve_inputs(cycle_id: int, names: tuple[str, ...]) -> list[str]:
+    """`inputs: [SRS.md, ...]` 를 **실제로 만들어진 파일 경로**로 바꾼다.
+
+    ⚠️ 이게 없으면 참고 자료가 노드에 전달되지 않는다.
+       실제로 그랬다 — 프론트엔드가 화면 목록도 디자인 토큰도 못 본 채 사이트를 만들었다.
+
+    같은 이름이 여러 단계에서 나오면 **가장 최근 것**을 쓴다.
+    """
+    out: list[str] = []
+    runs = REPO_ROOT / "runs" / str(cycle_id)
+    project = REPO_ROOT / PROJECT_ID
+    for name in names:
+        if name in ("order",):
+            continue
+        found: list[Path] = []
+        if runs.exists():
+            found += [p for p in runs.rglob(name) if p.is_file()]
+        if project.exists():
+            found += [p for p in project.rglob(name) if p.is_file()]
+        if not found:
+            continue
+        best = max(found, key=lambda p: p.stat().st_mtime)
+        out.append(str(best.relative_to(REPO_ROOT)))
+    return out
 
 
 def _order_text(cycle_id: int) -> str:
@@ -450,9 +483,10 @@ async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
         role=role, cycle_id=cycle_id, step_id=sdef.id, step_name=sdef.name,
         task=_task_name(sdef),
         spec_url=f"{hq}/api/specs/{role}/raw",
-        context_urls=tuple(f"{hq}/api/files?path={c}" for c in sdef.inputs
-                           if c not in ("order",)),
-        outputs=(tuple(o for o in sdef.outputs if "*" not in o)
+        context_urls=tuple(
+            f"{hq}/api/files?path={quote(c)}"
+            for c in resolve_inputs(cycle_id, sdef.inputs)),
+        outputs=(tuple(o for o in sdef.outputs_for(role) if "*" not in o)
                  or (("VERDICT.md",) if sdef.type in ("gate",) else ())),
         timeout_sec=sdef.timeout_sec,
         order=_order_text(cycle_id) if "order" in sdef.inputs else "",
