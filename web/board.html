@@ -3,16 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AGORA Web — 티켓 보드</title>
+<title>티켓 보드 · 타임라인 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{max-width:1400px;margin:1.2rem auto;padding:0 1.2rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.9rem}
+  .col h3{margin:0 0 .8rem;font-size:1rem;display:flex;align-items:center;gap:.5rem}
+  .col h3 .n{background:var(--panel2);border-radius:999px;padding:.1rem .6rem;
+             font-size:.9rem;color:var(--dim)}
+  .col.todo h3{color:var(--wait)} .col.doing h3{color:var(--run)}
+  .col.done h3{color:var(--ok)}   .col.rejected h3{color:var(--bad)}
+  .card{background:#121824;border:1px solid var(--line);border-radius:8px;
+        padding:.7rem .8rem;margin-bottom:.6rem;line-height:1.5}
+  .card .t{font-weight:700;font-size:.98rem;margin-bottom:.3rem}
+  .card .who{font-size:.85rem;color:var(--dim);font-family:ui-monospace,monospace}
+  .card .why{font-size:.9rem;color:#fca5a5;margin-top:.35rem}
+  .card .dod{font-size:.9rem;color:var(--dim);margin-top:.35rem}
+  .empty{color:var(--dim);font-size:.92rem;padding:.5rem .2rem}
+
+  .sect{margin-top:1.6rem}
+  .sect h2{font-size:1.1rem;margin:0 0 .7rem;display:flex;align-items:center;gap:.6rem}
+  .steps{display:flex;flex-direction:column;gap:.45rem}
+  .srow{display:grid;grid-template-columns:64px 1fr auto;gap:.8rem;align-items:center;
+        background:var(--panel);border:1px solid var(--line);border-left-width:4px;
+        border-radius:8px;padding:.6rem .9rem}
+  .srow .k{font-family:ui-monospace,monospace;font-weight:800;font-size:1rem}
+  .srow .nm{font-size:.98rem}
+  .srow .role{font-size:.85rem;color:var(--dim);font-family:ui-monospace,monospace}
+  .srow .st{font-size:.88rem;font-weight:700;padding:.2rem .7rem;border-radius:999px;
+            background:var(--panel2);color:var(--dim);white-space:nowrap}
+  .srow.DONE{border-left-color:var(--ok)}    .srow.DONE .st{background:#153d22;color:#86efac}
+  .srow.RUNNING{border-left-color:var(--run)} .srow.RUNNING .st{background:#1b2740;color:#93c5fd}
+  .srow.WAITING_HUMAN{border-left-color:var(--wait)} .srow.WAITING_HUMAN .st{background:#4d3a10;color:#fcd34d}
+  .srow.FAILED{border-left-color:var(--bad)} .srow.FAILED .st{background:#341a1a;color:#fecaca}
+  .srow .err{grid-column:1/-1;font-size:.9rem;color:#fca5a5}
+  .arts{font-size:.92rem;color:var(--dim);margin-top:.6rem}
+</style>
 </head>
 <body>
-  <!-- Phase 4 에서 구현한다 (BRIEF §2).
-       티켓 보드 / 타임라인. 개인 가동률 지표는 띄우지 않는다 (BRIEF §8.4) —
-       "3번 책상이 논다" 가 아니라 "B사가 설계 단계에서 멈춰 있다" 로 보여야 한다. -->
-  <main class="placeholder">
-    <h1>티켓 보드</h1>
-    <p class="phase">보드는 <strong>Phase 4</strong> 에서 만듭니다.</p>
-  </main>
+<header class="bar">
+  <div class="brand">AGORA<span>Web</span></div>
+  <div class="cycleinfo">
+    <span id="c-title">-</span>
+    <span id="c-status" class="badge">-</span>
+    <a class="link" href="/index.html" style="margin-left:.8rem">픽셀 오피스 →</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- 개인 가동률 지표는 띄우지 않는다 (BRIEF §8.4).
+       "3번 책상이 논다" 가 아니라 "B사가 설계 단계에서 멈춰 있다" 로 보여야
+       화살이 사람이 아니라 병목을 가리킨다. -->
+  <div class="sect">
+    <h2>티켓</h2>
+    <div class="grid" id="board"></div>
+  </div>
+
+  <div class="sect">
+    <h2>타임라인 <span id="arts" class="arts"></span></h2>
+    <div class="steps" id="steps"></div>
+  </div>
+</div>
+
+<script>
+const COLS = [["todo","할 일"],["doing","진행"],["done","완료"],["rejected","반려"]];
+const $ = (id) => document.getElementById(id);
+
+async function tick() {
+  let d;
+  try { d = (await (await fetch("/api/dashboard")).json()).data; } catch (e) { return; }
+
+  const c = d.cycle;
+  $("c-title").textContent = c
+    ? `사이클 #${c.id} · ${c.pipeline} · ${c.attempt_no}회차` : "사이클 없음";
+  $("c-status").textContent = c ? c.status : "-";
+  $("c-status").className = "badge " + (c ? c.status : "");
+
+  // ── 티켓 ──────────────────────────────────────────────
+  const list = (d.tickets && d.tickets.list) || [];
+  $("board").innerHTML = COLS.map(([k, ko]) => {
+    const items = list.filter(t => (t.status || "todo") === k);
+    const n = (d.tickets && d.tickets[k]) ?? items.length;
+    const cards = items.length ? items.map(t => `
+      <div class="card">
+        <div class="t">${esc(t.title)}</div>
+        <div class="who">${esc(t.from)} → ${esc(t.to)}</div>
+        ${t.reason ? `<div class="why">사유: ${esc(t.reason)}</div>` : ""}
+      </div>`).join("") : `<div class="empty">없음</div>`;
+    return `<div class="col ${k}"><h3>${ko}<span class="n">${n}</span></h3>${cards}</div>`;
+  }).join("");
+
+  // ── 타임라인 ──────────────────────────────────────────
+  $("steps").innerHTML = (d.steps || []).map(s => {
+    const who = s.parallel && s.parallel.length ? s.parallel.join(", ") : (s.role || "-");
+    const label = { DONE:"완료", RUNNING:"진행 중", PENDING:"대기",
+                    WAITING_HUMAN:"사람 대기", FAILED:"실패",
+                    REJECTED:"반려", SKIPPED:"건너뜀" }[s.status] || s.status;
+    return `<div class="srow ${s.status}">
+      <span class="k">${s.key}</span>
+      <span><span class="nm">${esc(s.name)}</span>
+        <span class="role">· ${esc(who)}</span>
+        ${s.type ? `<span class="role">· ${s.type === "human_gate" ? "사람 게이트" : "게이트"}</span>` : ""}
+        ${s.attempt > 1 ? `<span class="role">· ${s.attempt}회차</span>` : ""}</span>
+      <span class="st">${label}</span>
+      ${s.error ? `<span class="err">${esc(s.error)}</span>` : ""}
+    </div>`;
+  }).join("") || `<div class="empty">아직 사이클이 없습니다.</div>`;
+
+  $("arts").textContent = c
+    ? `산출물 ${d.artifacts || 0}건 · AGENT.md ${d.specs.customized || 0}/${d.specs.total || 0}` : "";
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, m =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[m]));
+}
+
+tick();
+setInterval(tick, 3000);
+</script>
 </body>
 </html>
