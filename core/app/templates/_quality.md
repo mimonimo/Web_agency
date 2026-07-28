@@ -22,6 +22,8 @@
   :root { --color-primary: #...; --space-md: 16px; }
   .btn { background: var(--color-primary); padding: var(--space-md); }
   ```
+- **산출물은 `output/` 바로 아래 평평하게** 둔다. 하위 폴더를 만들면 링크가 깨진다.
+- `var(--x)` 를 쓰면 그 변수를 **같은 파일 `:root`** 에 정의한다. 파일을 나누지 마라.
 - 글꼴은 시스템 폰트 스택으로:
   `font-family: system-ui, "Noto Sans KR", "Malgun Gothic", sans-serif;`
 - 접근성: 모든 `<input>` 에 `<label for>`, 이미지에 `alt`,

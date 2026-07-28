@@ -11,6 +11,34 @@
 
 ## 프론트엔드라면
 
+### ⚠️ 파일 배치 — 여기서 제일 많이 틀린다
+
+**`output/` 바로 아래에 평평하게** 놓는다. 하위 폴더를 만들지 마라.
+
+```
+output/index.html
+output/style.css
+output/app.js
+```
+
+- `output/frontend/index.html` 처럼 한 겹 더 만들면 **링크가 깨진다.**
+- `design-tokens.json` 을 읽었으면 그 값을 **`style.css` 맨 위 `:root` 에 직접 써라.**
+  별도 파일(`design-tokens.css`)로 나누지 마라. 실제로 나눴다가 `@import` 를 빠뜨려
+  색이 하나도 안 먹은 적이 있다.
+
+```css
+/* style.css 맨 위 */
+:root {
+  --color-primary: #A67C00;   /* design-tokens.json 에서 그대로 */
+  --space-md: 16px;
+  ...
+}
+```
+
+- `index.html` 에서 참조하는 경로는 `./style.css` 처럼 같은 폴더 기준으로 쓴다.
+
+### 화면 구성
+
 `index.html` 하나에 **필요한 화면을 전부** 담는다 (섹션 전환 방식).
 파일을 여러 개로 쪼개면 인터넷 없는 환경에서 링크가 깨지기 쉽다.
 

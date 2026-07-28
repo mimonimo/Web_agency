@@ -1,0 +1,30 @@
+:root {
+  --color-primary: #A67C00;
+  --color-primary-dark: #805800;
+  --color-accent: #D9B866;
+  --color-bg: #FFF8E1;
+  --color-surface: #FFFFFF;
+  --color-text: #3E2723;
+  --color-text-dim: #6F4E37;
+  --color-border: #BCAAA4;
+  --color-danger: #C62828;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+
+  --font-family: system-ui, 'Noto Sans KR', sans-serif;
+  --font-size-sm: 0.9rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-h2: 1.5rem;
+  --font-size-h1: 2rem;
+
+  --shadow-card: 0 2px 8px rgba(0,0,0,.08);
+}

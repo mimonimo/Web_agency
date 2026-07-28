@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1"> 
+    <title>밀밭제과</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.js" defer></script>
+</head>
+<body>
+<header class="header">
+    <div class="header__logo">밀밭제과</div>
+    <nav class="header__nav">
+        <button class="btn btn--icon" id="nav-home">홈</button>
+        <button class="btn btn--icon" id="nav-cart">장바구니 (<span id="cart-count">0</span>)</button>
+    </nav>
+</header>
+<main class="main">
+    <!-- 홈(상품 목록) -->
+    <section id="home" class="section section--active">
+        <h1 class="section__title">빵 제품 리스트</h1>
+        <div class="product-grid" id="product-grid"></div>
+    </section>
+
+    <!-- 상세 페이지 -->
+    <section id="detail" class="section">
+        <button class="btn btn--back" id="detail-back">← 뒤로가기</button>
+        <div class="detail__content" id="detail-content"></div>
+    </section>
+
+    <!-- 장바구니 -->
+    <section id="cart" class="section">
+        <h1 class="section__title">장바구니</h1>
+        <div id="cart-items"></div>
+        <p class="cart-total" id="cart-total"></p>
+    </section>
+
+    <!-- 로그인 -->
+    <section id="login" class="section">
+        <h1 class="section__title">로그인</h1>
+        <form class="form" id="login-form">
+            <label class="form__field" for="email">이메일</label>
+            <input type="email" id="email" name="email" required />
+            <label class="form__field" for="password">비밀번호</label>
+            <input type="password" id="password" name="password" required />
+            <button type="submit" class="btn btn--primary">로그인</button>
+            <p class="form__error" id="login-error"></p>
+        </form>
+    </section>
+
+    <!-- 문의 폼 -->
+    <section id="contact" class="section">
+        <h1 class="section__title">문의하기</h1>
+        <form class="form" id="contact-form">
+            <label class="form__field" for="c-name">이름</label>
+            <input type="text" id="c-name" name="name" required />
+            <label class="form__field" for="c-email">이메일</label>
+            <input type="email" id="c-email" name="email" required />
+            <label class="form__field" for="c-subject">제목</label>
+            <input type="text" id="c-subject" name="subject" required />
+            <label class="form__field" for="c-message">내용</label>
+            <textarea id="c-message" name="message" rows="4" required></textarea>
+            <button type="submit" class="btn btn--primary">전송</button>
+            <p class="form__msg" id="contact-msg"></p>
+        </form>
+    </section>
+</main>
+<footer class="footer">
+    <p>© 2026 밀밭제과. 연락: 김밀밭 010-1234-5678</p>
+</footer>
+</body>
+</html>
