@@ -13,3 +13,10 @@ venv/
 
 # 오프라인 반출용 이미지 아카이브 (수 GB)
 ops/images/*.tar
+
+# 네이티브 실행 산출물 — 재생성 가능
+.hq.pid
+repo/agora.db
+repo/agora.db-*
+repo/hq.log
+repo/project-001/
