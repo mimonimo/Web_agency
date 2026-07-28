@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -274,20 +275,77 @@ def create_rework_ticket(db: Session, cycle: Cycle, args: dict[str, Any]) -> Non
 
 # ── AGENT.md 생명주기 (BRIEF §4) ──────────────────────────────────────
 def spec_path(role: str) -> Path:
+    """이번 사이클의 **작업본**. 학생이 고치는 파일."""
     return REPO_ROOT / PROJECT_ID / "agents" / role / "AGENT.md"
 
 
+# ★ 기준선 — 사람(Claude Code)이 미리 써 둔 역할 지시문. git 이 추적한다.
+#   교실의 로컬 모델에게 11개 지시문을 통째로 쓰게 하면 빈 템플릿이 나온다.
+#   구조와 품질 기준은 여기서 확정하고, 모델에게는 「이번 프로젝트」 한 칸만 맡긴다.
+BASELINE_DIR = Path(__file__).resolve().parents[2] / "agents"
+
+_PROJECT_SEC = re.compile(
+    r"^##\s*이번 프로젝트\s*$.*?(?=^<!--\s*↑|\Z)", re.M | re.S)
+
+
+def baseline_spec(role: str) -> str:
+    p = BASELINE_DIR / role / "AGENT.md"
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def compose_spec(role: str, project_block: str = "") -> str:
+    """기준선 + 이번 프로젝트 내용 = 이번 사이클의 AGENT.md 초안.
+
+    기준선이 없으면(역할을 새로 추가한 경우) 최소 골격이라도 만들어 준다 —
+    빈 파일을 주면 학생이 무엇을 고쳐야 할지 알 수 없다.
+    """
+    base = baseline_spec(role)
+    block = (project_block or "").strip()
+    # 예전 경로 호환: 기획이 AGENT.md 전문을 보내 왔으면 「이번 프로젝트」만 뽑아 쓴다.
+    if block.count("\n## ") >= 3:
+        m = _PROJECT_SEC.search(block)
+        block = (m.group(0).split("\n", 1)[1].strip() if m else "")
+        block = "" if block.startswith("(아직") else block
+    if not base:
+        return _skeleton_spec(role, block)
+    if not block:
+        return base
+    return _PROJECT_SEC.sub(
+        lambda _: f"## 이번 프로젝트\n\n{block}\n\n", base, count=1)
+
+
+def _skeleton_spec(role: str, block: str) -> str:
+    from . import roles as roles_catalog
+    r = roles_catalog.get(role)
+    def _li(xs): return "\n".join(f"- {x}" for x in xs) or "- (미정)"
+    return (
+        f"# 나는 AGORA Web 의 {r.get('display', role)} 담당이다\n\n"
+        f"## 나의 역할\n{r.get('mission', '(미정)')}\n\n"
+        f"## 내 파일\n{_li(r.get('owns') or [])}\n\n"
+        "## 출력 형식\n- 마크다운. 결론 먼저.\n\n"
+        f"## 금지\n{_li(r.get('forbid') or [])}\n\n"
+        f"## 애매할 때\n{_li([f'{k}: {v}' for k, v in (r.get('asks') or {}).items()])}\n"
+        f"- 답이 없으면: {r.get('default', '범위를 늘리지 않는다')}\n\n"
+        f"## 완료 보고\n{_li(r.get('report') or [])}\n\n"
+        f"## 이번 프로젝트\n\n{block or '(아직 비어 있음)'}\n"
+    )
+
+
 def emit_spec_drafts(db: Session, cycle: Cycle, bodies: dict[str, str]) -> None:
-    """S2 기획이 11개 AGENT.md 초안을 만든다 (인수 #12)."""
+    """S2 가 11개 AGENT.md 작업본을 만든다 (인수 #12).
+
+    `bodies` 는 **「이번 프로젝트」 칸의 내용**이다. 나머지는 기준선에서 온다.
+    (예전처럼 전문이 들어와도 동작한다 — `compose_spec` 이 알아서 처리한다.)
+    """
     draft_dir = REPO_ROOT / PROJECT_ID / ".drafts"
     for role in ROLES:
-        body = bodies.get(role, "")
+        body = compose_spec(role, bodies.get(role, ""))
         fm = (
             "---\n"
             f"role: {role}\n"
             f"cycle: {cycle.id}\n"
             "status: draft\n"
-            "author: planner-agent\n"
+            "author: baseline+planner\n"
             f"generated_at: {now().isoformat()}\n"
             "customized_at: null\n"
             "---\n\n"

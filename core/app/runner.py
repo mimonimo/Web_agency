@@ -22,9 +22,10 @@ from typing import Any
 
 from sqlalchemy import select
 
-from . import pipelines, services
+from . import directives, pipelines, services
+from . import roles as roles_catalog
 from .db import SessionLocal
-from .models import Cycle, CycleStatus, ROLES, Step, StepStatus
+from .models import Cycle, CycleStatus, ROLE_DISPLAY, ROLES, Step, StepStatus
 from .orchestrator import Action, Event, next_step
 from .services import PROJECT_ID, REPO_ROOT, audit, now
 
@@ -334,17 +335,25 @@ SPEC_SECTIONS = ("나의 역할", "내 파일", "출력 형식", "금지", "애�
 
 
 def spec_ok(body: str) -> bool:
-    """AGENT.md 초안이 쓸 만한가 (BRIEF §4.1 의 6칸).
+    """기획이 만든 **「이번 프로젝트」 칸**이 쓸 만한가.
 
-    학생이 **고칠 수 있어야** 의미가 있다. 한 줄짜리 압축본은 고칠 자리가 없다.
-    - 6칸이 `## 제목` 으로 나뉘어 있을 것
-    - 각 칸에 최소한의 알맹이가 있을 것
+    ★ 예전에는 여기서 AGENT.md 전문(6칸)을 검사했다. 지금은 6칸이 기준선에서 오므로
+      검사할 것은 "이번 주문의 이야기가 실제로 들어 있는가" 하나다.
+      로컬 모델에게 작고 구체적인 일만 맡기는 것이 이 구조의 요점이다.
+
+    통과 조건: 120자 이상 + 자리표시자가 아님 + 주문의 고유명사나 항목이 보임.
     """
-    if not body or len(body.strip()) < 300:
+    t = (body or "").strip()
+    if len(t) < 120:
         return False
-    text = body
-    headed = sum(1 for sec in SPEC_SECTIONS if f"## {sec}" in text)
-    return headed >= 5
+    low = t.lower()
+    if any(x in t for x in ("아직 비어", "(미정)", "TODO", "여기에 내용")) or "lorem" in low:
+        return False
+    # 전문이 들어온 예전 경로도 통과시킨다 (6칸 중 5칸 이상)
+    if sum(1 for s in SPEC_SECTIONS if f"## {s}" in t) >= 5:
+        return True
+    # 목록이든 문단이든, 최소 두 줄은 있어야 학생이 고칠 자리가 생긴다
+    return len([ln for ln in t.splitlines() if ln.strip()]) >= 2
 
 
 def _role_url(role: str) -> str | None:
@@ -383,23 +392,22 @@ async def _draft_specs_batch(cycle_id: int, sdef: Any, url: str,
 
     hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
     listing = "\n".join(
-        f"  - `agents/{r}/AGENT.md` — {ROLE_HINT.get(r, r)}" for r in roles)
+        f"  - `agents/{r}/PROJECT.md` — {ROLE_DISPLAY.get(r, r)}({ROLE_HINT.get(r, r)})"
+        for r in roles)
     instruction = (
-        f"아래 {len(roles)}개 역할의 AGENT.md 초안을 쓴다. **이 {len(roles)}개만** 만든다.\n\n"
+        f"{_project_block_prompt()}\n\n"
+        f"이번에 만들 파일은 다음 {len(roles)}개뿐이다. **이것만** 만든다.\n\n"
         f"{listing}\n\n"
-        + (TEMPLATES / "planner_draft_prompt.md").read_text(encoding="utf-8")
-        .split("## 형식", 1)[-1].split("## 지켜야 할 것", 1)[0].strip()
-        + "\n\n⚠️ 위 파일을 **전부** 만들어라. 하나라도 빠지면 다음 단계가 막힌다."
-        "\n⚠️ '금지' 칸은 역할마다 달라야 한다. 같은 문장을 복사하지 마라."
+        "⚠️ 위 파일을 **전부** 만들어라. 하나라도 빠지면 다음 단계가 막힌다."
     )
     req = a2a.TaskRequest(
         role="planner", cycle_id=cycle_id, step_id=sdef.id,
-        step_name=f"AGENT.md 초안 {len(roles)}개",
+        step_name=f"역할별 이번 프로젝트 {len(roles)}건",
         task="draft_specs_batch",
         spec_url=f"{hq}/api/specs/planner/raw",
         context_urls=tuple(f"{hq}/api/files?path={quote(c)}"
                            for c in resolve_inputs(cycle_id, ("SRS.md", "SCREENS.md"))),
-        outputs=tuple(f"agents/{r}/AGENT.md" for r in roles),
+        outputs=tuple(f"agents/{r}/PROJECT.md" for r in roles),
         timeout_sec=600,
         order=_order_text(cycle_id),
         instruction=instruction,
@@ -415,7 +423,7 @@ async def _draft_specs_batch(cycle_id: int, sdef: Any, url: str,
             for a in t.artifacts:
                 name = a.get("name", "").replace("\\", "/")
                 for r in roles:
-                    if name.endswith(f"{r}/AGENT.md"):
+                    if name.endswith(f"{r}/PROJECT.md") or name.endswith(f"{r}/AGENT.md"):
                         txt = a.get("text", "")
                         if txt.lstrip().startswith("---"):
                             parts = txt.split("---", 2)
@@ -433,23 +441,20 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
 
     hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
     instruction = (
-        f"`{role}` 역할({ROLE_HINT.get(role, role)}) 한 개의 AGENT.md 초안만 쓴다.\n"
-        f"파일 경로는 정확히 `agents/{role}/AGENT.md` 다. 다른 파일은 만들지 마라.\n\n"
-        "다음 6칸을 반드시 이 순서로 포함한다:\n"
-        "  ## 나의 역할 / ## 내 파일 / ## 출력 형식 / ## 금지 / ## 애매할 때 / ## 완료 보고\n\n"
-        "이번 요구사항에서 **이 역할이 특별히 조심해야 할 것**을 '금지' 칸에 최소 1줄 넣는다.\n"
-        "초안은 완벽할 필요 없다. 학생이 자기 전문 지식으로 보강할 것이다.\n"
-        "front-matter(--- 머리말)는 쓰지 마라. HQ 가 붙인다."
+        f"{_project_block_prompt()}\n\n"
+        f"이번에 만들 파일은 하나뿐이다: `agents/{role}/PROJECT.md`\n"
+        f"({ROLE_DISPLAY.get(role, role)} — {ROLE_HINT.get(role, role)})\n"
+        "다른 파일은 만들지 마라."
     )
     req = a2a.TaskRequest(
         role="planner", cycle_id=cycle_id, step_id=sdef.id,
-        step_name=f"{role} AGENT.md 초안",
+        step_name=f"{role} 이번 프로젝트",
         task="draft_one_spec",
         spec_url=f"{hq}/api/specs/planner/raw",
         context_urls=tuple(
             f"{hq}/api/files?path={quote(c)}"
             for c in resolve_inputs(cycle_id, ("SRS.md", "SCREENS.md", "SOW.md"))),
-        outputs=(f"agents/{role}/AGENT.md",),
+        outputs=(f"agents/{role}/PROJECT.md",),
         timeout_sec=300,
         order=_order_text(cycle_id),
         instruction=instruction,
@@ -461,12 +466,12 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
         await asyncio.sleep(4)
         t = await a2a.get_task(url, sent.task_id)
         if t.state == "completed":
-            want = f"agents/{role}/AGENT.md"
             for a in t.artifacts:
-                # ★ 정확히 이 역할의 파일만 집는다. endswith("AGENT.md") 로 잡으면
+                # ★ 정확히 이 역할의 파일만 집는다. endswith("PROJECT.md") 로 잡으면
                 #   다른 역할의 파일을 가져와 11개가 전부 같아진다.
                 name = a.get("name", "").replace("\\", "/")
-                if name == want or name.endswith(f"/{role}/AGENT.md"):
+                if name.endswith(f"/{role}/PROJECT.md") or name.endswith(f"/{role}/AGENT.md") \
+                        or name in (f"agents/{role}/PROJECT.md", f"agents/{role}/AGENT.md"):
                     txt = a.get("text", "")
                     if txt.lstrip().startswith("---"):
                         parts = txt.split("---", 2)
@@ -490,8 +495,20 @@ def _task_name(sdef: Any) -> str:
     return "work"
 
 
-def _instruction(sdef: Any) -> str:
-    """작업 지시 템플릿 (BRIEF §4.1). 없으면 빈 문자열."""
+def _instruction(sdef: Any, role: str = "") -> str:
+    """작업 지시를 조립한다 (BRIEF §4.1).
+
+    순서가 의미를 갖는다. 뒤에 오는 것이 앞을 이긴다고 모델에게 알려 두었으므로,
+    **사람이 끼워 넣은 지시가 맨 뒤**에 온다.
+
+        1. 작업 템플릿          무엇을 만드는가
+        2. 공통 품질 기준       모든 산출물에 적용
+        3. 역할 목표·완료조건   roles.yaml — 이 역할이 지켜야 할 검사 항목
+        4. (S2만) 스펙 템플릿
+        5. ★ 사람의 추가 지시   최우선
+
+    ⚠️ 전체 길이를 본다. 프롬프트가 커지면 로컬 모델이 중간에 멈춘다 (실제로 겪었다).
+    """
     parts = []
     f = TEMPLATES / f"{_task_name(sdef)}.md"
     if f.exists():
@@ -500,11 +517,21 @@ def _instruction(sdef: Any) -> str:
     q = TEMPLATES / "_quality.md"
     if q.exists():
         parts.append(q.read_text(encoding="utf-8").strip())
+    # ★ 역할의 목표와 완료 조건. 매 요청에 다시 실어야 따라온다.
+    if role:
+        b = roles_catalog.brief(role)
+        if b:
+            parts.append(b)
     # ★ AGENT.md 초안을 만드는 단계에는 BRIEF §4.1 의 템플릿을 반드시 붙인다
     if sdef.emits_specs:
         pd = TEMPLATES / "planner_draft_prompt.md"
         if pd.exists():
             parts.append(pd.read_text(encoding="utf-8").strip())
+    # ★ 사람이 끼워 넣은 지시 — 반드시 맨 뒤 (앞을 이긴다)
+    if role:
+        d = directives.block(role)
+        if d:
+            parts.append(d)
     return "\n\n".join(parts)
 
 
@@ -570,7 +597,7 @@ async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
                  or (("VERDICT.md",) if sdef.type in ("gate",) else ())),
         timeout_sec=sdef.timeout_sec,
         order=_order_text(cycle_id) if "order" in sdef.inputs else "",
-        instruction=_instruction(sdef),
+        instruction=_instruction(sdef, role),
     )
 
     db = SessionLocal()
@@ -635,12 +662,22 @@ def _save_artifacts(cycle_id: int, sdef: Any, role: str, t: Any,
     return saved
 
 
+def _project_block_prompt() -> str:
+    p = TEMPLATES / "project_block_prompt.md"
+    return p.read_text(encoding="utf-8").strip() if p.exists() else ""
+
+
 def _harvest_spec_bodies(out_dir: Path) -> dict[str, str]:
-    """기획이 만든 agents/<role>/AGENT.md 를 산출물에서 걷어낸다."""
+    """기획이 만든 역할별 「이번 프로젝트」 블록을 산출물에서 걷어낸다.
+
+    파일 이름이 `PROJECT.md` 든 `AGENT.md` 든 받는다 — 모델이 이름을 자주 헷갈린다.
+    """
     bodies: dict[str, str] = {}
     for role in ROLES:
-        for cand in (out_dir / "agents" / role / "AGENT.md",
+        for cand in (out_dir / "agents" / role / "PROJECT.md",
+                     out_dir / "agents" / role / "AGENT.md",
                      out_dir / f"{role}.md",
+                     out_dir / "planner" / "agents" / role / "PROJECT.md",
                      out_dir / "planner" / "agents" / role / "AGENT.md"):
             if cand.exists():
                 txt = cand.read_text(encoding="utf-8", errors="replace")
@@ -654,18 +691,11 @@ def _harvest_spec_bodies(out_dir: Path) -> dict[str, str]:
 
 
 def _draft_body(role: str) -> str:
-    """기획이 만드는 AGENT.md 초안 (BRIEF §4.1 의 6칸).
+    """기획이 「이번 프로젝트」 칸을 못 만들었을 때의 대체 문구.
 
-    초안은 완벽할 필요 없다. 학생이 자기 전문 지식으로 보강할 것이다.
+    ★ 예전에는 여기서 AGENT.md 전문을 흉내 냈다. 지금은 전문이 기준선
+      (`agents/<role>/AGENT.md`)에서 오므로, 못 채운 칸만 표시해 두면 된다.
+      빈 채로 두면 학생이 "기획이 뭘 안 했는지" 를 알 수 없다.
     """
-    return (
-        f"# 나는 AGORA Web 의 {role} 담당이다\n\n"
-        "## 나의 역할\n(기획이 생성한 초안)\n\n"
-        "## 내 파일\n- `repo/project-001/` 아래 내 역할 산출물\n\n"
-        "## 출력 형식\n- 마크다운. 결론 먼저.\n\n"
-        "## 금지\n- 요구사항에 없는 기능을 임의로 추가하지 않는다\n\n"
-        "## 애매할 때\n- 기획(planner)에게 A2A 로 묻는다\n\n"
-        "## 완료 보고\n- `report.md` 에 산출물 목록과 남은 이슈를 적는다\n\n"
-        "<!-- ↑ 여기까지가 기획이 만든 초안이다.\n"
-        "     학생은 자기 전문 지식을 더해 이 파일을 고치고 커밋한다. -->\n"
-    )
+    return ("(기획이 이번 프로젝트 내용을 채우지 못했다. "
+            "주문서를 보고 직접 적거나, 기획에게 재요청해라.)")
