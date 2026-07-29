@@ -389,7 +389,7 @@ phase5() {
   if [ -x "$HOME/agora-ops/dgx-fan.sh" ]; then
     h1=$(echo 'md5sum ~/agora/node.env 2>/dev/null | cut -c1-8' \
          | "$HOME/agora-ops/dgx-fan.sh" dgx-07 2>/dev/null | tail -1)
-    echo '~/agora/bootstrap-node.sh --role backend --hq http://220.67.5.62:8000 --dgx dgx-07' \
+    echo '~/agora/bootstrap-node.sh --role backend --hq http://<HQ주소>:8000 --dgx dgx-07' \
       | "$HOME/agora-ops/dgx-fan.sh" dgx-07 >/dev/null 2>&1
     h2=$(echo 'md5sum ~/agora/node.env 2>/dev/null | cut -c1-8' \
          | "$HOME/agora-ops/dgx-fan.sh" dgx-07 2>/dev/null | tail -1)

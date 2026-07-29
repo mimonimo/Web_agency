@@ -26,6 +26,10 @@ DGX 11대 · 각자 로컬 Ollama(gpt-oss:120b) · 인터넷 없이 교실에서
 📄 [ARCHITECTURE.md](ARCHITECTURE.md) — 구조와 설계 결정
 📄 [FLOW.md](FLOW.md) — 수업 흐름과 개입 지점
 📄 [agents/](agents/) — 11개 역할 지시문 기준선
+📄 [ops-node/](ops-node/) — DGX 11대 운영 도구 ([보안 주의](ops-node/SECURITY-NOTE.md))
+
+> ⚠️ 이 리포의 노드 IP 는 `10.0.0.x` **예시 값**이다. 실제 운영 값이 아니다.
+> 쓰려면 `ops-node/nodes.tsv` 를 자기 환경에 맞게 바꿔라.
 
 ---
 

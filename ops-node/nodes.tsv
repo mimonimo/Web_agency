@@ -1,0 +1,12 @@
+# node	ip	role	display
+dgx-02	10.0.0.52	planner	기획
+dgx-03	10.0.0.53	sales	영업
+dgx-04	10.0.0.54	sysadmin	인프라
+dgx-05	10.0.0.55	designer	디자인
+dgx-06	10.0.0.56	frontend	프론트엔드
+dgx-07	10.0.0.57	backend	백엔드
+dgx-08	10.0.0.58	dba	DB
+dgx-09	10.0.0.59	security	보안
+dgx-10	10.0.0.60	qa	QA
+dgx-11	10.0.0.61	customer	고객
+# dgx-12	10.0.0.62	pm	관리(PM) — 이 PC

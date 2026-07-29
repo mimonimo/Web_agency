@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 PIDF="$ROOT/.hq.pid"
 LOG="$ROOT/repo/hq.log"
+# 화면에 띄울 주소. 실제 운영 IP 는 커밋하지 않는다 — .env 의 HQ_HOST 에서 읽는다.
+HQ_ADDR="$(grep -sE '^HQ_HOST=' .env 2>/dev/null | tail -1 | cut -d= -f2)"
+HQ_ADDR="${HQ_ADDR:-localhost}"
 PORT="${HQ_PORT:-8000}"
 
 [ -f .env ] || cp .env.example .env
@@ -29,7 +32,7 @@ case "${1:-start}" in
     for _ in $(seq 1 40); do
       sleep 0.5
       if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
-        echo "HQ 기동 완료 → http://220.67.5.62:$PORT/  (pid $(cat "$PIDF"))"
+        echo "HQ 기동 완료 → http://$HQ_ADDR:$PORT/  (pid $(cat "$PIDF"))"
         exit 0
       fi
     done
@@ -45,7 +48,7 @@ case "${1:-start}" in
     # runs/ 뿐 아니라 showcase/ 도 본다
     find repo -name index.html -not -path "*/node_modules/*" -not -path "*/.archive/*" \
       2>/dev/null | sort \
-      | sed "s|^repo/|  http://220.67.5.62:${PORT}/preview/|"
+      | sed "s|^repo/|  http://${HQ_ADDR}:${PORT}/preview/|"
     ;;
   status)
     if running; then

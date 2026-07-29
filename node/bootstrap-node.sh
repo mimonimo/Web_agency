@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 학생 노드 부트스트랩 (BRIEF §5.5) — 노드 위에서 실행된다.
 #
-#   ./bootstrap-node.sh --role backend --hq http://220.67.5.62:8000 --dgx dgx-07
+#   ./bootstrap-node.sh --role backend --hq http://10.0.0.62:8000 --dgx dgx-07
 #
 # 하는 일:
 #   1. node.env 확인/생성
@@ -34,7 +34,7 @@ if [ -f "$ENVF" ]; then
   DGX="${DGX:-$AGORA_NODE_ID}"
 fi
 ROLE="${ROLE:?--role 을 지정하거나 node.env 가 있어야 한다}"
-HQ="${HQ:-http://220.67.5.62:8000}"
+HQ="${HQ:-http://10.0.0.62:8000}"
 DGX="${DGX:-$(whoami)}"
 
 cat > "$ENVF" <<ENV

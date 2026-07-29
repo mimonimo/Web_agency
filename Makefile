@@ -14,7 +14,7 @@ help:  ## 이 도움말
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "지금 바로:  make dev   → http://220.67.5.62:8000/"
+	@echo "지금 바로:  make dev   → http://10.0.0.62:8000/"
 	@echo "컨테이너로 가려면: sudo usermod -aG docker \$$USER 후 재로그인 → make up"
 
 dev: env  ## ★ 네이티브로 HQ 기동 (docker 권한 없이 — venv + SQLite)
