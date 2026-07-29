@@ -73,7 +73,16 @@ else
   fi
   # 표시용 주소는 localhost 로 (리포의 IP 는 예시 값이다)
   sed -i 's/^HQ_HOST=.*/HQ_HOST=localhost/' .env 2>/dev/null || true
-  good ".env" "생성 (EXECUTOR=sim · HQ_HOST=localhost)"
+  # ★ 이 PC 가 HQ 가 될 때 노드가 부를 주소. a2a 로 바꾸면 바로 필요해진다.
+  MYIP=$(python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.connect(('10.255.255.255',1));print(s.getsockname()[0])" 2>/dev/null || echo "")
+  if [ -n "$MYIP" ]; then
+    grep -q '^HQ_SELF_URL=' .env \
+      && sed -i "s#^HQ_SELF_URL=.*#HQ_SELF_URL=http://$MYIP:8000#" .env \
+      || echo "HQ_SELF_URL=http://$MYIP:8000" >> .env
+    good ".env" "생성 (EXECUTOR=sim · HQ_SELF_URL=http://$MYIP:8000)"
+  else
+    good ".env" "생성 (EXECUTOR=sim · HQ_HOST=localhost)"
+  fi
 fi
 
 # ── 5. 작업 디렉터리 ──────────────────────────────────────────

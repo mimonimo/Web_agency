@@ -64,6 +64,35 @@ $EDITOR provisioning/students.local.yaml     # ip 를 실제 값으로
 
 방화벽에서 **8000** 을 열어 둔다 (노드가 HQ 로 미러링·하트비트를 보낸다).
 
+> ⚠️ **`HQ_SELF_URL` 은 노드가 나를 부를 수 있는 주소여야 한다.**
+> 노드는 이 주소로 AGENT.md 와 참고 자료를 받아 간다. `127.0.0.1` 이면 노드가
+> **자기 자신**에게 물어보고 404 를 받는데, **단계는 실패하지 않는다** —
+> 에이전트가 아무것도 못 받은 채 지어내기 때문이다. 가장 알아채기 어려운 종류의 고장이다.
+> `bootstrap.sh` 가 이 PC 의 IP 로 자동으로 채우고, 비어 있으면 HQ 가 스스로 찾는다.
+> a2a 인데 루프백이면 부팅 로그에 경고가 뜨고 `acceptance.sh` 가 실패로 잡는다.
+
+### PM PC 를 바꿔도 노드는 안 고친다
+
+**노드는 자기를 부른 HQ 를 따라간다.** HQ 가 매 요청에 `hq_url` 을 실어 보내고
+어댑터가 그쪽으로 미러링·하트비트를 돌린다(`adopt_hq`). 새 PC 에서
+`./ops/dev.sh start` 만 하면 노드 11대의 `.env` 는 손대지 않아도 된다.
+
+```bash
+# 새 PM PC 에서
+git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
+./ops/bootstrap.sh                                   # HQ_SELF_URL 자동
+sed -i 's/^EXECUTOR=.*/EXECUTOR=a2a/' .env
+cp <노드IP 가 든 파일> provisioning/students.local.yaml
+./ops/dev.sh start
+./ops/acceptance.sh --phase 2                        # 카드 11/11 이면 끝
+```
+
+첫 단계를 보내는 순간 노드가 새 HQ 로 갈아탄다 — 노드 로그에 이렇게 남는다.
+
+```
+[hq] HQ 를 http://<옛HQ>:8000 → http://<새HQ>:8000 로 바꾼다 (요청에 실려 왔다)
+```
+
 ---
 
 ## 3. 노드 11대

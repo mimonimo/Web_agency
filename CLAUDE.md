@@ -796,3 +796,59 @@ ops/acceptance.sh   통과 116 · 실패 0   (전체 검색·본문 검색 인�
 - `sudo bash ~/agora-ops/expose-dgx12.sh` (8000·11434 개방, root 필요) 미실행.
 - `provisioning/students.yaml` 의 학생 이름이 비어 있다.
 - defect 파이프라인 S1/S6 모순 — 여전히 미해결.
+
+---
+
+## PM PC 를 옮길 수 있게 (2026-07-29)
+
+PM 질문: **"다른 PC 에서 깃허브 풀 받고, 해당 PC 가 PM 이 되어서 다른 노드한테 지시 가능한가?"**
+
+**확인해 보니 구멍이 두 개 있었다. 둘 다 조용히 망가지는 종류였다.**
+
+### ① 노드가 옛 HQ 로 보고했다
+
+노드는 HQ 주소를 자기 `.env`(`AGORA_HQ_URL`)에 박아 두고 있었다. 다른 PC 가 HQ 가 되면
+HQ→노드 호출은 되는데 **노드→HQ 미러링·하트비트가 옛 HQ 로 간다.** 새 HQ 화면에는
+노드가 죽어 보이고 활동 피드가 비어 있다. 노드 11대 `.env` 를 다 고치라고 하면
+반드시 한 대는 빠뜨린다.
+
+→ **노드가 자기를 부른 HQ 를 따라간다.** HQ 가 매 요청에 `hq_url` 을 싣고
+  어댑터가 `adopt_hq()` 로 갈아탄다. 노드는 손댈 필요가 없다.
+  실 노드(dgx-05)에 가짜 HQ 주소로 요청을 보내 **갈아타는 것과 되돌아오는 것**을 둘 다 확인했다.
+
+```
+[hq] HQ 를 http://220.67.5.62:8000 → http://220.67.5.99:8000 로 바꾼다 (요청에 실려 왔다)
+[hq] HQ 를 http://220.67.5.99:8000 → http://220.67.5.62:8000 로 바꾼다 (요청에 실려 왔다)
+```
+
+### ② `HQ_SELF_URL` 이 없으면 에이전트가 지어낸다
+
+`runner` 는 `HQ_SELF_URL` 이 없으면 `http://127.0.0.1:8000` 을 썼다.
+그 주소가 **노드에게** 전달되므로 노드는 **자기 자신**에게 AGENT.md 와 참고 자료를
+물어보고 404 를 받는다. 그런데 **단계는 실패하지 않는다** — 아무것도 못 받은 채
+에이전트가 지어내기 때문이다. `resolve_inputs` 사고와 똑같은 종류다.
+그리고 `.env.example` 에도 `bootstrap.sh` 에도 이 값이 없었다 —
+**새 PC 로 클론하면 100% 이 함정에 빠지는 상태였다.**
+
+→ `hq_self_url()` 이 `HQ_SELF_URL → HQ_HOST → 바깥 인터페이스 IP` 순으로 찾는다.
+  `bootstrap.sh` 가 클론 직후 이 PC 의 IP 로 채운다. a2a 인데 루프백이면
+  **부팅 로그에 경고**가 뜨고 `/api/health` 가 값을 드러내며
+  **`acceptance.sh` 가 실패로 잡는다.**
+
+### 새 PM PC 절차 (노드는 안 고친다)
+
+```bash
+git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
+./ops/bootstrap.sh                                # HQ_SELF_URL 자동
+sed -i 's/^EXECUTOR=.*/EXECUTOR=a2a/' .env
+cp <노드IP 가 든 파일> provisioning/students.local.yaml
+./ops/dev.sh start && ./ops/acceptance.sh --phase 2
+```
+
+### 검증
+
+```
+ops/acceptance.sh   통과 117 · 실패 0   (HQ 자기주소 판정 신설)
+노드 10대 재배포     ==> 전체 PASS
+실 노드 HQ 갈아타기  dgx-05 에서 왕복 확인 · 하트비트 복구까지
+```

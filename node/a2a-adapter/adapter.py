@@ -57,7 +57,21 @@ ENV = load_env()
 ROLE = os.getenv("AGORA_ROLE", ENV.get("AGORA_ROLE", "unknown"))
 NODE_ID = os.getenv("AGORA_NODE_ID", ENV.get("AGORA_NODE_ID", "unknown"))
 DISPLAY = ENV.get("AGORA_DISPLAY_NAME", ROLE)
+# ★ HQ 주소는 **고정이 아니다.**
+#   PM PC 가 바뀔 수 있다 — 다른 PC 가 깃허브에서 받아 HQ 가 되는 구성을 쓴다.
+#   그때 노드의 .env 를 11대 전부 고치게 하면 반드시 한 대는 빠뜨린다.
+#   그래서 요청에 실려 온 hq_url 을 보면 **노드가 그쪽을 따라간다** (adopt_hq).
+#   .env 값은 첫 하트비트를 어디로 보낼지 정하는 초기값일 뿐이다.
 HQ = os.getenv("AGORA_HQ_URL", ENV.get("AGORA_HQ_URL", "http://10.0.0.62:8000"))
+
+
+def adopt_hq(url: str) -> None:
+    """나를 부른 HQ 를 기억한다. 미러링·하트비트가 그쪽으로 간다."""
+    global HQ
+    url = (url or "").strip().rstrip("/")
+    if url and url != HQ and not url.startswith(("http://127.0.0.1", "http://localhost")):
+        print(f"[hq] HQ 를 {HQ} → {url} 로 바꾼다 (요청에 실려 왔다)", flush=True)
+        HQ = url
 MODEL = ENV.get("AGORA_MODEL", "gpt-oss:120b")
 WORKROOT = Path(ENV.get("AGORA_WORKSPACE", str(NODE_DIR / "workspace")))
 HERMES = str(HOME / ".local" / "bin" / "hermes")
@@ -406,6 +420,9 @@ def work(task_id: str, params: dict) -> None:
             TASKS[task_id].update({"state": state, "ended": time.time(), **kw})
 
     try:
+        # 1.5 나를 부른 HQ 를 따라간다 (PM PC 가 바뀌어도 노드를 안 고친다)
+        adopt_hq(params.get("hq_url", ""))
+
         # 2. spec_url 로 AGENT.md 받아오기
         spec = ""
         if params.get("spec_url"):

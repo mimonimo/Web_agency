@@ -211,6 +211,8 @@ async def health() -> dict[str, object]:
             "service": "agora-core",
             "project": os.getenv("PROJECT_ID", "project-001"),
             "executor": runner.EXECUTOR,
+            # 노드가 나를 부를 수 있는 주소. a2a 인데 루프백이면 참고자료가 안 간다.
+            "hq_self_url": runner.hq_self_url(),
         },
     }
 

@@ -697,7 +697,7 @@ async def _draft_specs_batch(cycle_id: int, sdef: Any, url: str,
     """기획에게 여러 역할의 AGENT.md 를 한 번에 쓰게 한다 (기본 3개)."""
     from . import a2a_client as a2a
 
-    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    hq = hq_self_url()
     listing = "\n".join(
         f"  - `agents/{r}/PROJECT.md` — {ROLE_DISPLAY.get(r, r)}({ROLE_HINT.get(r, r)})"
         for r in roles)
@@ -711,6 +711,7 @@ async def _draft_specs_batch(cycle_id: int, sdef: Any, url: str,
         role="planner", cycle_id=cycle_id, step_id=sdef.id,
         step_name=f"역할별 이번 프로젝트 {len(roles)}건",
         task="draft_specs_batch",
+        hq_url=hq,
         spec_url=f"{hq}/api/specs/planner/raw",
         context_urls=tuple(f"{hq}/api/files?path={quote(c)}"
                            for c in resolve_inputs(cycle_id, ("SRS.md", "SCREENS.md"))),
@@ -746,7 +747,7 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
     """기획에게 역할 하나의 AGENT.md 만 쓰게 한다 (BRIEF §4.1 의 6칸)."""
     from . import a2a_client as a2a
 
-    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    hq = hq_self_url()
     instruction = (
         f"{_project_block_prompt()}\n\n"
         f"이번에 만들 파일은 하나뿐이다: `agents/{role}/PROJECT.md`\n"
@@ -757,6 +758,7 @@ async def _draft_one_spec(cycle_id: int, sdef: Any, url: str, role: str) -> str:
         role="planner", cycle_id=cycle_id, step_id=sdef.id,
         step_name=f"{role} 이번 프로젝트",
         task="draft_one_spec",
+        hq_url=hq,
         spec_url=f"{hq}/api/specs/planner/raw",
         context_urls=tuple(
             f"{hq}/api/files?path={quote(c)}"
@@ -965,10 +967,52 @@ def _log_check(cycle_id: int, sdef: Any, role: str, ok: int, total: int,
         db.close()
 
 
+_HQ_WARNED = False
+
+
+def hq_self_url() -> str:
+    """**노드가 나(HQ)를 부를 수 있는 주소.** 여기서 틀리면 조용히 망한다.
+
+    노드는 이 주소로 AGENT.md 와 참고 자료를 받아 간다.
+    `127.0.0.1` 로 두면 노드가 **자기 자신**에게 물어보고 404 를 받는다.
+    그런데 단계는 실패하지 않는다 — 에이전트가 아무것도 못 받은 채 **지어내기** 때문이다.
+    (실제로 겪었다. `resolve_inputs` 사고와 같은 종류의 조용한 실패다.)
+
+    그래서 순서대로 찾는다:
+      HQ_SELF_URL  →  HQ_HOST:HQ_PORT  →  바깥으로 나가는 인터페이스의 IP
+    a2a 인데도 루프백이면 **로그로 크게 경고한다.**
+    """
+    global _HQ_WARNED
+    url = (os.getenv("HQ_SELF_URL") or "").strip().rstrip("/")
+    port = os.getenv("HQ_PORT", os.getenv("PORT", "8000"))
+    if not url:
+        host = (os.getenv("HQ_HOST") or "").strip()
+        if host and host not in ("localhost", "127.0.0.1"):
+            url = f"http://{host}:{port}"
+    if not url and EXECUTOR == "a2a":
+        # 노드에게 알려 줄 내 IP 를 스스로 찾는다. 패킷은 나가지 않는다.
+        import socket
+        try:
+            sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sk.connect(("10.255.255.255", 1))
+            url = f"http://{sk.getsockname()[0]}:{port}"
+            sk.close()
+        except Exception:                                        # noqa: BLE001
+            pass
+    if not url:
+        url = f"http://127.0.0.1:{port}"
+    if EXECUTOR == "a2a" and "127.0.0.1" in url and not _HQ_WARNED:
+        _HQ_WARNED = True
+        print("[hq] ⚠️ HQ_SELF_URL 이 루프백이다. 노드가 참고 자료를 못 받고 "
+              "지어낸다. .env 에 HQ_SELF_URL=http://<이 PC 의 IP>:%s 를 넣어라" % port,
+              flush=True)
+    return url
+
+
 async def _send_and_wait(cycle_id: int, sdef: Any, role: str, url: str,
                          out_dir: Path, fix_note: str, attempt: int, a2a) -> list[str]:
     """한 번 보내고 끝날 때까지 폴링한다."""
-    hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    hq = hq_self_url()
     instruction = _instruction(sdef, role)
     if fix_note:
         instruction = f"{instruction}\n\n{fix_note}"
@@ -985,6 +1029,7 @@ async def _send_and_wait(cycle_id: int, sdef: Any, role: str, url: str,
         timeout_sec=sdef.timeout_sec,
         order=_order_text(cycle_id) if "order" in sdef.inputs else "",
         instruction=instruction,
+        hq_url=hq,                 # 노드가 나를 따라오게 한다 (PM PC 가 바뀔 수 있다)
         # 재실행은 작업 디렉터리를 분리한다 — 앞 시도의 파일을 그대로 집어오지 않게
         work_key=f"{sdef.id}-{role}-r{attempt}" if attempt else "",
     )

@@ -439,6 +439,22 @@ phase6() {
   fi
   curl -sf -X DELETE "$HQ/api/agents/designer/notes" >/dev/null 2>&1
 
+  # ★ 노드가 나(HQ)를 부를 수 있는 주소를 제대로 잡았나
+  #   여기가 루프백이면 노드가 자기 자신에게 물어보고 404 를 받는데,
+  #   단계는 실패하지 않고 에이전트가 **지어낸다.** 조용한 실패라 인수로 잡는다.
+  # ★ 실행 중인 HQ 에게 직접 묻는다. 새 프로세스에서 계산하면 .env 를 안 읽어 틀린다.
+  read -r EXEC SELF <<<"$(curl -sf "$HQ/api/health" | "$PY_BIN" -c "
+import json,sys; d=json.load(sys.stdin)['data']
+print(d.get('executor','?'), d.get('hq_self_url','?'))" 2>/dev/null)"
+  if [ "$EXEC" = "a2a" ]; then
+    case "$SELF" in
+      *127.0.0.1*|*localhost*) ng "HQ 자기주소가 루프백이다 ($SELF) — 노드가 참고자료를 못 받는다" ;;
+      *) ok "HQ 자기주소 $SELF (노드가 부를 수 있다)" ;;
+    esac
+  else
+    ok "HQ 자기주소 $SELF (sim 이므로 루프백이어도 된다)"
+  fi
+
   # ★ 폴더를 몰라도 파일을 집어내는가 — "파일 조회가 불편하다" 에 대한 답
   if curl -sf "$HQ/api/files/find?q=RESULT.md" | grep -q '"path"'; then
     ok "★ 이름만으로 repo 전체에서 파일을 찾는다"

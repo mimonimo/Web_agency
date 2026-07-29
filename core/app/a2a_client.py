@@ -41,10 +41,12 @@ class TaskRequest:
     order: str = ""            # 주문서 원문 — 지어내지 않게 하는 근거
     instruction: str = ""      # 이 태스크의 지시 템플릿 (BRIEF §4.1)
     work_key: str = ""         # 노드 작업 디렉터리 구분자 (비면 step_id)
+    hq_url: str = ""           # ★ 나(HQ)의 주소. 노드가 여기로 보고한다
 
     def to_params(self) -> dict[str, Any]:
         return {
             "role": self.role,
+            "hq_url": self.hq_url,
             "cycle_id": self.cycle_id,
             "step_id": self.step_id,
             "step_name": self.step_name,
