@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="별빛공방 도자기 원데이 클래스 — 물레 체험, 손으로 빚는 컵, 유약 놀이, 커플 클래스 예약">
+<title>별빛공방 — 도자기 원데이 클래스</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#list" data-go="list">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">별빛공방<small>도자기 원데이 클래스</small></span>
+    </a>
+    <nav class="nav" aria-label="주요 메뉴">
+      <button type="button" class="nav-link is-current" data-go="list">클래스</button>
+      <button type="button" class="nav-link" data-go="book">예약</button>
+      <button type="button" class="nav-link" data-go="check">예약 확인</button>
+      <button type="button" class="nav-link" data-go="ask">문의</button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ── 1. 클래스 목록 ─────────────────────────────────────── -->
+  <section id="list" class="screen is-active" aria-labelledby="list-h">
+    <div class="wrap">
+      <div class="hero">
+        <p class="eyebrow">화~일 · 10:00 / 14:00 / 19:00</p>
+        <h1 id="list-h">흙을 만지는 두 시간</h1>
+        <p class="lead">
+          전화하지 않아도 됩니다. 원하는 날짜와 시간을 골라 바로 신청하세요.
+          만든 그릇은 굽고 유약을 입혀 <strong>3주 뒤</strong>에 찾아가시면 됩니다.
+        </p>
+        <button type="button" class="btn btn-primary btn-lg" data-go="book">클래스 예약하기</button>
+      </div>
+
+      <h2 class="section-title">지금 신청할 수 있는 클래스</h2>
+      <ul class="class-grid" id="class-grid"></ul>
+    </div>
+  </section>
+
+  <!-- ── 2. 클래스 상세 ─────────────────────────────────────── -->
+  <section id="detail" class="screen" aria-labelledby="detail-h">
+    <div class="wrap wrap-narrow">
+      <button type="button" class="btn btn-ghost btn-back" data-go="list">← 클래스 목록</button>
+      <article class="detail-card" id="detail-body">
+        <h2 id="detail-h">클래스</h2>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── 3. 예약 ────────────────────────────────────────────── -->
+  <section id="book" class="screen" aria-labelledby="book-h">
+    <div class="wrap wrap-narrow">
+      <h2 id="book-h" class="section-title">예약하기</h2>
+      <p class="muted">월요일은 휴무입니다. 정원이 차면 다른 시간대를 골라 주세요.</p>
+
+      <form id="book-form" class="form" novalidate>
+        <div class="field">
+          <label for="f-class">클래스</label>
+          <select id="f-class" name="klass" required></select>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="f-date">날짜</label>
+            <input type="date" id="f-date" name="date" required>
+          </div>
+          <div class="field">
+            <label for="f-time">시간</label>
+            <select id="f-time" name="time" required>
+              <option value="">고르세요</option>
+              <option value="10:00">10:00</option>
+              <option value="14:00">14:00</option>
+              <option value="19:00">19:00</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="f-people">인원</label>
+            <input type="number" id="f-people" name="people" min="1" max="6" value="1" required>
+          </div>
+          <div class="field">
+            <label for="f-name">이름</label>
+            <input type="text" id="f-name" name="name" autocomplete="name" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-tel">연락처</label>
+          <input type="tel" id="f-tel" name="tel" inputmode="numeric"
+                 placeholder="010-0000-0000" autocomplete="tel" required>
+        </div>
+
+        <p class="seat-note" id="seat-note" role="status" aria-live="polite"></p>
+        <p class="error" id="book-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn-primary btn-lg btn-block" id="book-submit" disabled>
+          예약하기
+        </button>
+      </form>
+
+      <div class="receipt" id="receipt" hidden>
+        <p class="receipt-label">예약이 접수되었습니다</p>
+        <p class="receipt-no" id="receipt-no"></p>
+        <dl class="receipt-detail" id="receipt-detail"></dl>
+        <p class="muted">번호를 적어 두세요. 방문하실 때 현장에서 결제합니다.</p>
+        <button type="button" class="btn btn-ghost" data-go="check">예약 확인으로</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4. 예약 확인 ───────────────────────────────────────── -->
+  <section id="check" class="screen" aria-labelledby="check-h">
+    <div class="wrap wrap-narrow">
+      <h2 id="check-h" class="section-title">예약 확인</h2>
+      <form id="check-form" class="form form-inline" novalidate>
+        <div class="field">
+          <label for="f-code">예약번호</label>
+          <input type="text" id="f-code" name="code" placeholder="BB-20260812-001" required>
+        </div>
+        <button type="submit" class="btn btn-primary">조회</button>
+      </form>
+      <div id="check-result" class="result-box" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ── 5. 문의 ────────────────────────────────────────────── -->
+  <section id="ask" class="screen" aria-labelledby="ask-h">
+    <div class="wrap wrap-narrow">
+      <h2 id="ask-h" class="section-title">문의</h2>
+      <form id="ask-form" class="form" novalidate>
+        <div class="field-row">
+          <div class="field">
+            <label for="q-name">이름</label>
+            <input type="text" id="q-name" name="name" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="q-tel">연락처</label>
+            <input type="tel" id="q-tel" name="tel" inputmode="numeric" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="q-body">내용</label>
+          <textarea id="q-body" name="body" rows="4"
+                    placeholder="궁금한 점을 적어 주세요 (10자 이상)" required></textarea>
+        </div>
+        <p class="error" id="ask-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block">보내기</button>
+      </form>
+
+      <h3 class="section-title-sm">보낸 문의</h3>
+      <ul class="ask-list" id="ask-list"></ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p><strong>별빛공방</strong> · 화~일 10:00–21:00 (월요일 휴무)</p>
+    <p class="muted">예약 문의 010-2847-1103 · 현장 결제만 가능합니다</p>
+  </div>
+</footer>
+
+<script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+# 별빛공방 API 계약 (S4 백엔드)
+# 응답 형식은 전 프로젝트 공통. 예외 없다.
+#   성공  {"ok": true,  "data": {...}}
+#   실패  {"ok": false, "error": "사람이 읽을 한국어"}
+# 상태코드는 200 / 400 / 404 만 쓴다 (로그인이 없으므로 401·403 은 안 쓴다).
+
+openapi_like: 1
+base: /api
+
+paths:
+  /classes:
+    get:
+      summary: 클래스 목록
+      responses:
+        "200":
+          example:
+            ok: true
+            data:
+              - {id: 1, name: "물레 체험 — 그릇 하나", price: 45000, minutes: 120, capacity: 4}
+
+  /classes/{id}:
+    get:
+      summary: 클래스 하나
+      responses:
+        "200":
+          example: {ok: true, data: {id: 1, name: "물레 체험 — 그릇 하나", price: 45000,
+                                     minutes: 120, capacity: 4, description: "발물레에 앉아…"}}
+        "404":
+          example: {ok: false, error: "그런 클래스가 없습니다"}
+
+  /slots:
+    get:
+      summary: 특정 클래스·날짜의 시간대별 남은 자리
+      query: {klassId: 1, date: "2026-08-12"}
+      responses:
+        "200":
+          example: {ok: true, data: [{time: "10:00", left: 2}, {time: "14:00", left: 4},
+                                     {time: "19:00", left: 4}]}
+        "400":
+          example: {ok: false, error: "월요일은 휴무입니다"}
+
+  /bookings:
+    post:
+      summary: 예약 접수
+      request:
+        example: {klassId: 1, date: "2026-08-12", time: "10:00", people: 2,
+                  name: "한지우", tel: "010-3312-8890"}
+      responses:
+        "200":
+          example: {ok: true, data: {code: "BB-20260812-001", price: 90000}}
+        "400":
+          example: {ok: false, error: "남은 자리는 1명입니다"}
+
+  /bookings/{code}:
+    get:
+      summary: 예약번호로 조회
+      responses:
+        "200":
+          example: {ok: true, data: {code: "BB-20260812-001", klass: "물레 체험 — 그릇 하나",
+                                     date: "2026-08-12", time: "10:00", people: 2, name: "한지우"}}
+        "404":
+          example: {ok: false, error: "그런 예약번호가 없습니다"}
+
+  /inquiries:
+    post:
+      summary: 문의 접수
+      request:
+        example: {name: "배소윤", tel: "010-7741-3320", body: "아이가 7살인데 참여 가능한가요?"}
+      responses:
+        "200": {example: {ok: true, data: {received: true}}}
+        "400": {example: {ok: false, error: "문의 내용을 조금 더 적어 주세요"}}
+
+validation:
+  # ★ 화면에서만 막지 않는다. 서버에서 다시 확인한다 (보안 게이트 항목).
+  - 필수값 누락 → 400
+  - date 가 오늘 이전 → 400 "오늘 이후 날짜를 골라 주세요"
+  - date 가 월요일 → 400 "월요일은 휴무입니다"
+  - time 이 10:00/14:00/19:00 이 아님 → 400
+  - people 이 정수 아님 또는 1 미만 → 400
+  - people 이 정원 초과 또는 잔여 초과 → 400
+  - tel 숫자 9자리 미만 → 400 "연락처를 확인해 주세요"
+  - body 10자 미만 → 400
+
+errors:
+  # 스택 트레이스를 그대로 뱉지 않는다. 사용자가 읽을 한국어로 감싼다.
+  policy: "예기치 못한 오류는 {ok:false, error:'요청을 처리하지 못했습니다'} 로 감싸고 서버 로그에만 상세를 남긴다"

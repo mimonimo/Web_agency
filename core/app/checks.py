@@ -86,22 +86,37 @@ def _designer(d: Path) -> list[Finding]:
         return [Finding(False, "design-tokens.json 이 올바른 JSON 이 아니다", str(e),
                         "따옴표·쉼표를 확인하고 순수 JSON 으로만 써라")]
 
-    flat: dict[str, str] = {}
-    def walk(o, ):
+    # ★ 그룹 이름을 잃으면 `{"space": {"--sp-1": "4px"}}` 를 못 센다.
+    #   토큰 이름을 `--sp-*` 로 짧게 쓰는 것은 흔하고 올바른 방식이다.
+    #   그래서 **부모 그룹 이름을 함께** 들고 다닌다.
+    flat: dict[str, str] = {}          # 잎 키 → 값
+    tagged: list[tuple[str, str, str]] = []   # (그룹, 키, 값)
+
+    def walk(o: object, group: str = "") -> None:
         if isinstance(o, dict):
             for k, v in o.items():
                 if isinstance(v, (dict, list)):
-                    walk(v)
+                    walk(v, str(k))
                 else:
                     flat[str(k)] = str(v)
+                    tagged.append((group, str(k), str(v)))
         elif isinstance(o, list):
             for v in o:
-                walk(v)
+                walk(v, group)
     walk(data)
 
-    colors = [v for v in flat.values() if re.fullmatch(r"#[0-9a-fA-F]{3,8}", v.strip())]
-    spaces = [k for k in flat if "space" in k.lower() or "spacing" in k.lower()]
-    fonts = [k for k in flat if "font" in k.lower() or "text" in k.lower()]
+    def group_of(words: tuple[str, ...]) -> list[str]:
+        """그룹 이름이든 키 이름이든 그 낱말이 들어 있으면 센다."""
+        out = []
+        for g, k, _ in tagged:
+            hay = f"{g} {k}".lower()
+            if any(w in hay for w in words):
+                out.append(k)
+        return out
+
+    colors = [v for _, _, v in tagged if re.fullmatch(r"#[0-9a-fA-F]{3,8}", v.strip())]
+    spaces = group_of(("space", "spacing", "gap", "--sp", "size"))
+    fonts = group_of(("font", "text", "--fs", "type"))
     f.append(Finding(len(colors) >= 6, f"색 {len(colors)}개 (6개 이상 필요)",
                      f"{len(colors)}개", "primary·bg·surface·text·muted·danger 를 채워라"))
     f.append(Finding(len(spaces) >= 4, f"간격 단계 {len(spaces)}개 (4단계 이상 필요)",

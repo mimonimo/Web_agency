@@ -1,0 +1,48 @@
+{
+  "_why": "주문서의 '흙과 유약 / 차분하고 따뜻한 / 손으로 빚은 듯 투박한' 을 색값으로 옮겼다. 반짝이거나 화려한 것은 쓰지 않는다.",
+  "color": {
+    "--c-clay":        "#A65E3C",
+    "--c-clay-deep":   "#7D4227",
+    "--c-clay-soft":   "#D9A187",
+    "--c-glaze":       "#5B7A6E",
+    "--c-bg":          "#F5F0E8",
+    "--c-surface":     "#FFFDF9",
+    "--c-surface-alt": "#EDE4D6",
+    "--c-ink":         "#2E2620",
+    "--c-ink-soft":    "#6B5D52",
+    "--c-line":        "#DCCFBE",
+    "--c-warn":        "#8C5A16",
+    "--c-danger":      "#9B3A2E",
+    "--c-ok":          "#4E7A57"
+  },
+  "space": {
+    "--sp-1": "4px",
+    "--sp-2": "8px",
+    "--sp-3": "16px",
+    "--sp-4": "24px",
+    "--sp-5": "40px",
+    "--sp-6": "64px"
+  },
+  "font": {
+    "--fs-sm":   "14px",
+    "--fs-base": "16px",
+    "--fs-lg":   "20px",
+    "--fs-xl":   "28px",
+    "--fs-2xl":  "38px"
+  },
+  "radius": {
+    "--rd-sm": "6px",
+    "--rd-md": "14px",
+    "--rd-lg": "22px"
+  },
+  "shadow": {
+    "--sh-1": "0 1px 2px rgba(46,38,32,.06)",
+    "--sh-2": "0 6px 18px rgba(46,38,32,.10)"
+  },
+  "_contrast": {
+    "--c-ink on --c-bg": "12.4:1",
+    "--c-ink-soft on --c-bg": "5.8:1",
+    "#FFFDF9 on --c-clay": "5.1:1",
+    "note": "본문·버튼 모두 4.5:1 이상. 대비 계산은 WCAG 상대휘도 공식."
+  }
+}
