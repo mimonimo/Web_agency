@@ -1,7 +1,74 @@
 # CLAUDE.md — 누적 기록
 
 > BRIEF 작업규칙 6: Phase 종료 시 이번에 내린 결정과 남은 이슈를 여기에 누적 기록한다.
-> 새 세션은 `BRIEF.md` 와 이 파일을 먼저 읽는다.
+> 새 세션은 이 파일을 먼저 읽는다.
+
+---
+
+# ★ 새 PC 에서 이어받는다면 — 여기부터
+
+```bash
+git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
+./ops/bootstrap.sh        # venv · 의존성 · .env · 작업 디렉터리 (멱등)
+./ops/dev.sh start        # → http://localhost:8000
+```
+
+`bootstrap.sh` 는 **노드가 없는 PC** 를 전제로 `EXECUTOR=sim` 을 잡는다.
+그 상태로 주문 접수부터 배포까지 전 구간이 몇 분 만에 돈다 — 흐름과 화면을
+전부 확인할 수 있다. 실제 DGX 노드가 있으면 `.env` 에서 `EXECUTOR=a2a` 로 바꾼다.
+
+## 클론에 따라오지 않는 것 (`.gitignore`)
+
+| | |
+|---|---|
+| `.env` | `bootstrap.sh` 가 `.env.example` 에서 만든다 |
+| `repo/agora.db` | 첫 기동 때 자동 생성 |
+| `repo/project-001/` `repo/runs/` | 첫 사이클을 돌리면 생긴다 |
+| `.venv/` | `bootstrap.sh` 가 만든다 |
+
+**`repo/showcase/` 는 따라온다.** 지난 결과물 3벌(로컬 개선 전/후 · Claude 레퍼런스)이
+들어 있어 클론 직후에도 `/projects.html` 에서 바로 볼 수 있다.
+
+## 먼저 읽을 것
+
+| 파일 | 무엇 |
+|---|---|
+| [`README.md`](README.md) | 30초 요약 · 설계 결정 3가지 · 결과 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 구조 · 상태기계 · 지시 조립 순서 · 고장 대비 |
+| [`FLOW.md`](FLOW.md) | 수업 흐름 · 사람이 개입하는 5지점 |
+| [`docs/KNOWN-ISSUES.md`](docs/KNOWN-ISSUES.md) | **실제로 나온 결함 14건** + 아직 못 막은 것 |
+| [`agents/`](agents/) | 11개 역할 기준선 지시문 (사람이 쓴다) |
+| [`core/app/roles.yaml`](core/app/roles.yaml) | 역할 목표·완료조건 (코드 아님, 데이터) |
+
+## 손대기 전에 알아야 할 것 세 가지
+
+1. **품질은 모델이 아니라 구조가 잡는다.** 지시문에 "하지 마라" 를 적는 것만으로는
+   안 막힌다 — 실측했다. 막히는 것은 `checks.py` 의 **검사 → 실패목록 → 재실행** 루프다.
+   새 결함을 발견하면 `docs/KNOWN-ISSUES.md` 에 적고, `checks.py` 에 검사를 넣고,
+   `core/tests/test_roles.py` 에 그 검사의 테스트를 넣는다.
+2. **`reset` 의 기본값은 `keep_specs=True`.** 학생이 고친 AGENT.md 를 리셋 한 번에
+   날리면 수업이 망한다. 이 기본값을 바꾸지 마라.
+3. **`repo/runs/` 를 손으로 지우지 마라.** 완성된 사이트가 거기 있다. 초기화는
+   `ops/reset.sh` 로 — `repo/.archive/` 에 백업을 남긴다.
+   (실제로 한 번 날렸다가 노드에서 51개를 회수했다.)
+
+## 확인 명령
+
+```bash
+make test                      # 상태기계 38 + 역할카탈로그 95 + E2E
+./ops/acceptance.sh            # 전체 인수 (HQ 가 떠 있어야 한다)
+./ops/reference-check.sh --all # 결과물 채점 · 세 판 비교
+.venv/bin/python ops/site-check.py <사이트폴더>   # 19항목
+```
+
+## ops-node/ 를 실제로 쓰려면
+
+공개 리포라 **노드 IP 를 `10.0.0.x` 예시 값으로 바꿔** 올렸고,
+노드 sudo 비밀번호는 `NODE_SUDO_PW` 환경변수로 받게 고쳤다.
+`ops-node/nodes.tsv` 를 자기 환경 값으로 바꾸면 나머지 스크립트가 전부 거기서 읽는다.
+자세한 것은 [`ops-node/SECURITY-NOTE.md`](ops-node/SECURITY-NOTE.md).
+
+---
 
 ## 진행 상황
 
