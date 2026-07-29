@@ -103,25 +103,52 @@ def _recover_interrupted() -> None:
     from .models import Step, StepStatus
     from . import runner
 
+    from .models import CycleStatus
+
     db = SessionLocal()
     try:
-        stuck = db.scalars(
-            select(Step).where(Step.status == StepStatus.RUNNING)).all()
+        stuck = list(db.scalars(
+            select(Step).where(Step.status == StepStatus.RUNNING)).all())
+
+        # ★ 종료 중에 FAILED 로 찍혀 버린 것도 되살린다.
+        #   실행기가 취소되면서 "frontend: ; backend: ;" 같은 **빈 사유**의
+        #   실패가 남는 일이 있었다. 그러면 사이클이 통째로 죽어 아무도 못 살린다.
+        #   진짜 실패는 사유가 있다. 사유가 없거나 중단 흔적이면 재시도할 값어치가 있다.
+        for s in db.scalars(select(Step).where(Step.status == StepStatus.FAILED)):
+            e = (s.error or "").strip()
+            if not e or "CancelledError" in e or e.endswith((":", "; dba: ", ": ")) \
+               or all(part.split(":", 1)[-1].strip() == ""
+                      for part in e.split("오류:")[-1].split(";") if part.strip()):
+                stuck.append(s)
+
         if not stuck:
             return
         cycles: set[int] = set()
         for s in stuck:
+            was = s.status.value if hasattr(s.status, "value") else str(s.status)
             s.status = StepStatus.PENDING
+            s.error = None
             s.started_at = None
             cycles.add(s.cycle_id)
             services.audit(db, "hq", "step.recover", f"cycle:{s.cycle_id}:{s.step_key}",
-                           {"note": "HQ 재시작으로 끊긴 단계를 되돌렸다"})
+                           {"was": was, "note": "HQ 재시작으로 끊긴 단계를 되돌렸다"})
             services.mirror(db, s.cycle_id, "hq", s.role or "hq", "response",
                             f"{s.step_key} 다시 시작 — HQ 재시작으로 끊겼다")
         db.commit()
+
         for cid in cycles:
             c = db.get(Cycle, cid)
-            if c and c.status.value == "RUNNING":
+            if c is None:
+                continue
+            st = c.status.value if hasattr(c.status, "value") else str(c.status)
+            # 사이클까지 FAILED 로 죽었으면 되살려 준다. 사람이 손댈 수 없는 상태다.
+            if st == "FAILED":
+                c.status = CycleStatus.RUNNING
+                services.audit(db, "hq", "cycle.recover", f"cycle:{cid}",
+                               {"note": "중단으로 죽은 사이클을 되살렸다"})
+                db.commit()
+                st = "RUNNING"
+            if st == "RUNNING":
                 runner.kick(cid)
         print(f"[recover] 끊긴 단계 {len(stuck)}개를 되살렸다 (사이클 {sorted(cycles)})")
     except Exception as e:                                   # noqa: BLE001
@@ -181,9 +208,30 @@ async def health() -> dict[str, object]:
 
 # 네이티브 실행 시 caddy 가 없으므로 정적 파일을 직접 서빙한다.
 # 컨테이너로 돌릴 때는 SERVE_WEB=0 으로 끄고 caddy 에게 맡긴다.
+class NoStaleFiles(StaticFiles):
+    """화면 파일은 **항상 서버에 물어보고** 쓰게 한다.
+
+    ★ 실제로 겪은 일: 화면을 고친 뒤에도 어떤 역할은 옛 화면이 떴다.
+      `Cache-Control` 이 없으면 브라우저가 휴리스틱 캐싱을 하고,
+      **캐시 키에 쿼리스트링이 포함**되므로 먼저 열어 본
+      `/agent.html?role=pm` 만 옛 페이지로 남는다.
+      "관리·백엔드·QA·고객만 다른 화면이 뜬다" 가 바로 이것이었다.
+
+    `no-cache` 는 "쓰지 마라" 가 아니라 "쓰기 전에 물어봐라" 다.
+    ETag 가 같으면 304 로 끝나므로 느려지지 않는다.
+    수업 중에 화면을 고쳐도 새로고침 한 번이면 반영된다.
+    """
+
+    async def get_response(self, path: str, scope):
+        r = await super().get_response(path, scope)
+        if path.endswith((".html", ".js", ".css")):
+            r.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return r
+
+
 if SERVE_WEB and WEB_DIR.exists():
     @app.get("/", include_in_schema=False)
     async def _root():
         return RedirectResponse("/index.html")
 
-    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+    app.mount("/", NoStaleFiles(directory=str(WEB_DIR), html=True), name="web")

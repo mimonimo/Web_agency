@@ -198,8 +198,23 @@ async def _drive(cycle_id: int) -> None:
             err = None
         except asyncio.TimeoutError:
             result, err = None, f"{key} 시간 초과 ({timeout}초)"
+        except asyncio.CancelledError:
+            # ★ HQ 가 내려가는 중이다. 이건 단계의 실패가 아니다.
+            #   여기서 FAILED 로 적으면 사이클이 통째로 죽고, 재시작해도
+            #   자가복구가 손댈 수 없다 (복구는 RUNNING 만 되살린다).
+            #   RUNNING 인 채로 두고 물러난다 — 다음 부팅 때 되살아난다.
+            db = SessionLocal()
+            try:
+                audit(db, "hq", "step.interrupted", f"cycle:{cycle_id}:{key}",
+                      {"note": "HQ 종료로 중단 — 다음 기동 때 되살린다"})
+                db.commit()
+            finally:
+                db.close()
+            raise
         except Exception as e:                                  # noqa: BLE001
-            result, err = None, f"{key} 실행 오류: {e}"
+            # 메시지가 빈 예외도 있다. 최소한 어떤 종류였는지는 남긴다.
+            detail = str(e).strip() or type(e).__name__
+            result, err = None, f"{key} 실행 오류: {detail}"
 
         db = SessionLocal()
         try:
@@ -341,8 +356,12 @@ async def _execute_llm(cycle_id: int, sdef: Any) -> dict[str, Any]:
     artifacts: list[str] = []
     errors: list[str] = []
     for role, res in zip(roles, results):
-        if isinstance(res, Exception):
-            errors.append(f"{role}: {res}")
+        if isinstance(res, asyncio.CancelledError):
+            # HQ 종료로 취소된 것이다. 실패로 바꿔치지 않고 그대로 올려보낸다.
+            raise res
+        if isinstance(res, BaseException):
+            # str() 이 빈 예외가 있다 (CancelledError 등). 종류라도 남긴다.
+            errors.append(f"{role}: {str(res).strip() or type(res).__name__}")
         else:
             artifacts.extend(res)
     if errors and not artifacts:
@@ -568,8 +587,12 @@ async def _execute_a2a(cycle_id: int, sdef: Any) -> dict[str, Any]:
     artifacts: list[str] = []
     errors: list[str] = []
     for role, res in zip(roles, results):
-        if isinstance(res, Exception):
-            errors.append(f"{role}: {res}")
+        if isinstance(res, asyncio.CancelledError):
+            # HQ 종료로 취소된 것이다. 실패로 바꿔치지 않고 그대로 올려보낸다.
+            raise res
+        if isinstance(res, BaseException):
+            # str() 이 빈 예외가 있다 (CancelledError 등). 종류라도 남긴다.
+            errors.append(f"{role}: {str(res).strip() or type(res).__name__}")
         else:
             artifacts.extend(res)
 
