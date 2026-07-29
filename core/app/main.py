@@ -77,10 +77,19 @@ async def _spec_watcher() -> None:
 
 
 def _seed_nodes() -> None:
-    """students.yaml 기준으로 노드 11개를 등록한다. 멱등."""
-    f = ROOT / "provisioning" / "students.yaml"
+    """students.yaml 기준으로 노드 11개를 등록한다. 멱등.
+
+    ★ `students.local.yaml` 이 있으면 **그쪽을 먼저 쓴다.**
+      공개 리포의 `students.yaml` 은 IP 가 예시 값(10.0.0.x)이다. 그대로 두면
+      부팅할 때마다 실제 노드 주소를 예시 값으로 덮어써서 HQ 가 노드를 못 부른다.
+      실제로 그렇게 만들어 S5 가 ConnectTimeout 으로 죽었다.
+      진짜 IP 는 `students.local.yaml` 에 두고 git 에서 제외한다.
+    """
+    local = ROOT / "provisioning" / "students.local.yaml"
+    f = local if local.exists() else ROOT / "provisioning" / "students.yaml"
     if not f.exists():
         return
+    print(f"[nodes] {f.name} 로 노드를 등록한다")
     doc = yaml.safe_load(f.read_text(encoding="utf-8"))
     db = SessionLocal()
     try:
