@@ -89,10 +89,52 @@ def _seed_nodes() -> None:
         db.close()
 
 
+def _recover_interrupted() -> None:
+    """HQ 가 죽거나 재시작했을 때 **RUNNING 인 채로 남은 단계**를 되살린다.
+
+    실행 태스크는 프로세스 메모리에 있다. HQ 를 재시작하면 태스크는 사라지는데
+    DB 의 step 은 RUNNING 으로 남는다. 그러면 사이클이 영원히 그 자리에 멈춘다 —
+    화면에는 "진행 중" 이라고 떠 있고 실제로는 아무도 일하지 않는다.
+    수업 중에 이게 나면 손쓸 방법이 없다.
+
+    그래서 부팅할 때 그런 단계를 PENDING 으로 되돌리고 실행기를 다시 깨운다.
+    노드는 새 작업으로 받으므로 그냥 다시 한다. 되돌린 사실은 로그에 남긴다.
+    """
+    from .models import Step, StepStatus
+    from . import runner
+
+    db = SessionLocal()
+    try:
+        stuck = db.scalars(
+            select(Step).where(Step.status == StepStatus.RUNNING)).all()
+        if not stuck:
+            return
+        cycles: set[int] = set()
+        for s in stuck:
+            s.status = StepStatus.PENDING
+            s.started_at = None
+            cycles.add(s.cycle_id)
+            services.audit(db, "hq", "step.recover", f"cycle:{s.cycle_id}:{s.step_key}",
+                           {"note": "HQ 재시작으로 끊긴 단계를 되돌렸다"})
+            services.mirror(db, s.cycle_id, "hq", s.role or "hq", "response",
+                            f"{s.step_key} 다시 시작 — HQ 재시작으로 끊겼다")
+        db.commit()
+        for cid in cycles:
+            c = db.get(Cycle, cid)
+            if c and c.status.value == "RUNNING":
+                runner.kick(cid)
+        print(f"[recover] 끊긴 단계 {len(stuck)}개를 되살렸다 (사이클 {sorted(cycles)})")
+    except Exception as e:                                   # noqa: BLE001
+        print(f"[recover] 복구 실패(무시하고 계속): {e}")
+    finally:
+        db.close()
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     _seed_nodes()
+    _recover_interrupted()
     task = asyncio.create_task(_spec_watcher())
     try:
         yield

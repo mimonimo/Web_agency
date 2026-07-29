@@ -6,30 +6,46 @@
 <title>AGENT.md 편집 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
+  /* 화면 전체를 채우되, 넘치면 각 칸이 스스로 스크롤한다.
+     예전에는 wrap 이 뷰포트를 꽉 채우고 넘친 내용이 잘려
+     저장 버튼이 화면 밖으로 나갔다. */
   .wrap{flex:1;display:grid;grid-template-columns:minmax(13rem,16rem) 1fr;
-        gap:1rem;padding:1rem;min-height:0}
-  @media (max-width:960px){ .wrap{grid-template-columns:1fr} }
+        gap:1rem;padding:1rem;min-height:0;align-items:start}
 
-  .roles{display:flex;flex-direction:column;gap:.35rem;overflow-y:auto}
+  .roles{display:flex;flex-direction:column;gap:.35rem;
+         max-height:calc(100vh - 7rem);overflow-y:auto}
   .roles button{display:flex;align-items:center;gap:.5rem;text-align:left;
     background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
-    padding:.55rem .75rem;cursor:pointer;color:var(--fg);font:inherit}
+    padding:.55rem .75rem;cursor:pointer;color:var(--fg);font:inherit;flex:none}
   .roles button:hover{background:var(--panel2)}
   .roles button.on{background:#1b2740;border-color:#33507f}
   .roles .st{margin-left:auto;font-size:.8rem;font-weight:800;border-radius:999px;
     padding:.05rem .55rem;background:var(--idle);color:#0d1017}
   .roles .st.customized{background:var(--ok)}
 
-  .pane{display:flex;flex-direction:column;gap:.8rem;min-height:0}
-  .paths{display:grid;grid-template-columns:auto 1fr;gap:.35rem .7rem;
+  /* 좁은 화면: 사이드바를 가로 칩 줄로 바꾼다.
+     세로 목록 그대로 두면 높이가 0으로 접혀 아무것도 안 보인다. */
+  @media (max-width:960px){
+    .wrap{grid-template-columns:1fr}
+    .roles{flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
+    .roles button{flex:0 0 auto}
+    .roles button br{display:none}
+  }
+
+  .pane{display:flex;flex-direction:column;gap:.8rem;min-width:0}
+  .paths{display:grid;grid-template-columns:auto 1fr;gap:.4rem .7rem;
          font-size:.93rem;align-items:center}
+  @media (max-width:700px){ .paths{grid-template-columns:1fr} }
   .paths b{color:var(--dim);font-weight:650;white-space:nowrap}
-  .paths .row{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-  .editor{flex:1;display:flex;flex-direction:column;min-height:0}
-  textarea{flex:1;min-height:22rem}
-  pre.view{flex:1;min-height:22rem;overflow:auto;margin:0;white-space:pre-wrap;
-    background:#0f131b;border:1.5px solid var(--line);border-radius:9px;
-    padding:.8rem;font-family:ui-monospace,"D2Coding",monospace;font-size:.95rem;line-height:1.65}
+  .paths .row{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;min-width:0}
+  .paths .pathbox{flex:1 1 12rem;min-width:0}
+
+  .editor{display:flex;flex-direction:column}
+  textarea#body{width:100%;height:min(52vh,30rem);min-height:16rem}
+  pre.view{margin:0;white-space:pre-wrap;height:min(52vh,30rem);min-height:16rem;
+    overflow:auto;background:#0f131b;border:1.5px solid var(--line);border-radius:9px;
+    padding:.8rem;font-family:ui-monospace,"D2Coding",monospace;
+    font-size:.95rem;line-height:1.65}
   pre.view .add{color:#86efac} pre.view .del{color:#fca5a5} pre.view .hd{color:#93c5fd}
   .bar2{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
   .prog{margin-left:auto;color:var(--dim);font-size:.95rem}
