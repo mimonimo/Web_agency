@@ -313,7 +313,171 @@ def read_verdict(cycle_id: int, step_key: str) -> tuple[bool, str]:
 async def _execute(cycle_id: int, sdef: Any) -> dict[str, Any]:
     if EXECUTOR == "a2a":
         return await _execute_a2a(cycle_id, sdef)
+    if EXECUTOR == "llm":
+        return await _execute_llm(cycle_id, sdef)
     return await _execute_sim(cycle_id, sdef)
+
+
+# ── EXECUTOR=llm — 모델 API 를 직접 부른다 ─────────────────────────────
+#
+# ★ 이 경로의 존재 이유: **모델을 바꿔도 같은 지시·같은 검사를 받는다**는 것을
+#   말이 아니라 코드로 보이기 위해서다.
+#   노드(Hermes)를 거치지 않고 Claude 나 OpenAI 호환 엔드포인트를 직접 부르되,
+#   지시문 조립·참고자료 전달·완료조건 검사·자가 재작업은 a2a 와 완전히 같다.
+#
+#   교실에서는 쓰지 않는다 (인터넷이 없다). 발표·비교·다른 환경 이식용이다.
+
+async def _execute_llm(cycle_id: int, sdef: Any) -> dict[str, Any]:
+    from . import providers
+
+    out_dir = REPO_ROOT / "runs" / str(cycle_id) / sdef.id / "output"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    roles = list(sdef.roles) or ["pm"]
+
+    results = await asyncio.gather(
+        *[_llm_one_role(cycle_id, sdef, r, out_dir, providers.get()) for r in roles],
+        return_exceptions=True,
+    )
+    artifacts: list[str] = []
+    errors: list[str] = []
+    for role, res in zip(roles, results):
+        if isinstance(res, Exception):
+            errors.append(f"{role}: {res}")
+        else:
+            artifacts.extend(res)
+    if errors and not artifacts:
+        raise RuntimeError("; ".join(errors))
+
+    if sdef.emits_specs:
+        bodies = _harvest_spec_bodies(out_dir)
+        db = SessionLocal()
+        try:
+            cycle = db.get(Cycle, cycle_id)
+            services.emit_spec_drafts(
+                db, cycle, {r: bodies.get(r, _draft_body(r)) for r in ROLES})
+        finally:
+            db.close()
+
+    return {"output_dir": str(out_dir.relative_to(REPO_ROOT)), "artifacts": artifacts}
+
+
+async def _llm_one_role(cycle_id: int, sdef: Any, role: str, out_dir: Path,
+                        provider: Any) -> list[str]:
+    """역할 하나 — 부르고, 저장하고, 검사하고, 미달이면 다시 부른다.
+
+    a2a 경로의 `_one_role` 과 같은 루프다. 다른 것은 "누가 실행하느냐" 뿐이다.
+    """
+    from . import checks as _checks, providers
+
+    role_dir = out_dir / role if len(sdef.roles) > 1 else out_dir
+    role_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs = tuple(o for o in sdef.outputs_for(role) if "*" not in o) or (
+        ("VERDICT.md",) if sdef.type in ("gate",) else ())
+    system = _llm_system(role)
+    fix_note = ""
+    saved: list[str] = []
+
+    for attempt in range(CHECK_RETRY + 1):
+        user = _llm_user(cycle_id, sdef, role, outputs, fix_note)
+        db = SessionLocal()
+        try:
+            services.mirror(db, cycle_id, "hq", role, "request",
+                            f"{sdef.id} {sdef.name} 지시 ({providers.describe()})"
+                            if not attempt else f"{sdef.id} 재작업 지시 (완료 조건 미달)")
+        finally:
+            db.close()
+
+        text = await provider.complete(system, user)
+        files = providers.parse_files(text)
+        if not files:
+            raise RuntimeError(
+                f"{role}: 모델이 파일 형식(=== FILE: … ===)을 지키지 않았다 "
+                f"({len(text)}자 응답)")
+
+        saved = []
+        for name, body in files.items():
+            p = role_dir / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(body, encoding="utf-8")
+            saved.append(str(p.relative_to(REPO_ROOT)))
+
+        rp = REPO_ROOT / "runs" / str(cycle_id) / sdef.id / (
+            f"report-{role}.md" if len(sdef.roles) > 1 else "report.md")
+        rp.parent.mkdir(parents=True, exist_ok=True)
+        rp.write_text(f"# {sdef.id} {role} 완료 보고\n\n"
+                      f"- 모델: {providers.describe()}\n"
+                      f"- 산출물 {len(saved)}건: {', '.join(files)}\n"
+                      f"- 시도 {attempt + 1}회\n", encoding="utf-8")
+
+        db = SessionLocal()
+        try:
+            services.mirror(db, cycle_id, role, "hq", "response",
+                            f"{sdef.id} 완료 — 산출물 {len(saved)}건")
+            audit(db, role, "step.artifacts", f"cycle:{cycle_id}:{sdef.id}",
+                  {"count": len(saved)})
+            db.commit()
+        finally:
+            db.close()
+
+        findings = _checks.check(role, role_dir, {"screens": _screen_count(cycle_id)})
+        bad = _checks.failures(findings)
+        okn, total = _checks.score(findings)
+        if not bad:
+            if total:
+                _log_check(cycle_id, sdef, role, okn, total, [])
+            return saved
+        if attempt >= CHECK_RETRY:
+            _log_check(cycle_id, sdef, role, okn, total, bad, final=True)
+            return saved
+        _log_check(cycle_id, sdef, role, okn, total, bad)
+        fix_note = _checks.report(findings)
+
+    return saved
+
+
+def _llm_system(role: str) -> str:
+    """시스템 프롬프트 = 그 역할의 AGENT.md. 노드가 하는 것과 같다."""
+    p = services.spec_path(role)
+    spec = p.read_text(encoding="utf-8") if p.exists() else services.baseline_spec(role)
+    return (spec or f"너는 AGORA Web 의 {role} 담당이다.").strip()
+
+
+def _llm_user(cycle_id: int, sdef: Any, role: str,
+              outputs: tuple[str, ...], fix_note: str) -> str:
+    """참고 자료를 본문에 실어 보낸다 (노드 어댑터가 하는 일과 같다).
+
+    ⚠️ 크기를 자른다. 프롬프트가 커지면 어떤 모델이든 품질이 떨어진다.
+       자른 파일은 제목에 밝힌다 — 조용히 자르면 "이게 전부" 라고 오해한다.
+    """
+    from . import providers
+
+    parts = [providers.output_protocol(outputs)]
+    order = _order_text(cycle_id) if "order" in sdef.inputs else ""
+    if order:
+        parts.append(f"## 주문서\n\n{order}")
+
+    budget, per = 40000, 8000
+    used = 0
+    refs: list[str] = []
+    for rel in resolve_inputs(cycle_id, sdef.inputs):
+        try:
+            body = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        take = min(per, max(0, budget - used))
+        if take <= 0:
+            break
+        cut = len(body) > take
+        used += take
+        refs.append(f"### {rel}{' (앞부분만)' if cut else ''}\n\n```\n{body[:take]}\n```")
+    if refs:
+        parts.append("## 참고 자료 — 반드시 읽고 따른다\n\n" + "\n\n".join(refs))
+
+    parts.append(f"## 지금 할 일 — {sdef.id} {sdef.name}\n\n{_instruction(sdef, role)}")
+    if fix_note:
+        parts.append(fix_note)
+    return "\n\n".join(parts)
 
 
 async def _execute_sim(cycle_id: int, sdef: Any) -> dict[str, Any]:
