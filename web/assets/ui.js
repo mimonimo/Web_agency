@@ -94,3 +94,60 @@ async function cycleBadge(el) {
     return d;
   } catch { el.innerHTML = ""; return null; }
 }
+
+/* ── 역할 선택기 ────────────────────────────────────────────────────
+ * 다섯 화면이 각자 다르게 그리고 있던 것을 하나로 모았다.
+ * 어느 화면에서 역할을 고르든 같은 모양·같은 동작이고,
+ * **화면을 옮겨도 고른 역할이 따라간다** (URL 의 ?role= 로 이어받는다).
+ * 매번 다시 고르게 만드는 것이 가장 흔한 불편이다. */
+
+let _role = new URLSearchParams(location.search).get("role") || null;
+
+/** 지금 보고 있는 역할. 없으면 기본값을 준다. */
+function currentRole(fallback = null) { return _role || fallback; }
+
+/** 역할을 유지한 채 다른 화면으로 가는 주소. */
+function withRole(href, role = _role) {
+  if (!role) return href;
+  const u = new URL(href, location.origin);
+  u.searchParams.set("role", role);
+  return u.pathname + u.search;
+}
+
+/**
+ * 역할 칩 줄을 그린다.
+ *   roleBar(el, {roles, onPick, badge, dot})
+ *     roles  [{role, display_name, ...}]
+ *     onPick 고르면 부르는 함수. 없으면 agent.html 로 이동한다.
+ *     badge  (r) => 숫자|"" — 칩 오른쪽에 뱃지
+ *     dot    (r) => true|false — 왼쪽 점(노드 살아 있음)
+ */
+function roleBar(el, { roles = [], onPick = null, badge = null, dot = null } = {}) {
+  el.classList.add("rolebar");
+  el.innerHTML = roles.map((r) => {
+    const id = r.role || r;
+    const ko = r.display_name || id;
+    const n = badge ? badge(id) : "";
+    const up = dot ? dot(id) : null;
+    return `<button data-r="${id}" class="${id === _role ? "on" : ""}" title="${esc(ko)}">
+      ${up === null ? "" : `<i class="dot${up ? " up" : ""}"></i>`}
+      <b>${esc(ko)}</b><span class="en">${esc(id)}</span>
+      ${n ? `<em>${n}</em>` : ""}
+    </button>`;
+  }).join("");
+  el.querySelectorAll("button").forEach((b) => b.onclick = () => {
+    _role = b.dataset.r;
+    const u = new URL(location.href);
+    u.searchParams.set("role", _role);
+    history.replaceState(null, "", u.pathname + u.search);
+    el.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    if (onPick) onPick(_role);
+    else location.href = `/agent.html?role=${_role}`;
+    // 내비게이션 링크도 역할을 이어받게 갱신
+    document.querySelectorAll("a[data-keeprole]").forEach((a) =>
+      a.href = withRole(a.dataset.keeprole));
+  });
+  document.querySelectorAll("a[data-keeprole]").forEach((a) =>
+    a.href = withRole(a.dataset.keeprole));
+  return el;
+}

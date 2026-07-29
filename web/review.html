@@ -28,8 +28,6 @@
   .modes button{text-align:left;padding:.7rem .8rem;line-height:1.35}
   .modes small{display:block;color:var(--dim);font-weight:500;font-size:.84rem;margin-top:.2rem}
   .running{display:flex;gap:.4rem;flex-wrap:wrap}
-  .log{max-height:16rem;overflow-y:auto;font-size:.92rem}
-  .log div{padding:.35rem 0;border-bottom:1px solid #232b3a}
   .hint{color:var(--dim);font-size:.92rem;line-height:1.6}
 </style>
 </head>
@@ -81,15 +79,22 @@
     </div>
 
     <div class="card">
-      <h3>🗒 최근 오간 말</h3>
-      <div class="log" id="log"></div>
+      <h3>🖥 진행 상황</h3>
+      <p class="hint" style="margin:.1rem 0 .6rem">
+        누가 무엇을 하고 있는지, 경과 시간까지 <b>실시간 콘솔</b>에서 봅니다.
+        여기서는 화면을 보고 고치는 데 집중하세요.</p>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <a class="btn sm primary" href="/console.html">🖥 실시간 콘솔 열기</a>
+        <a class="btn sm" href="/projects.html">📦 작업물</a>
+        <a class="btn sm" data-keeprole="/agent.html">🧑‍💻 에이전트 상세</a>
+      </div>
     </div>
   </aside>
 </div>
 
 <script src="/assets/ui.js"></script>
 <script>
-let cur = null, role = null, timer = null;
+let cur = null, role = currentRole(null), timer = null;
 
 nav('<span id="cyc" class="muted"></span>');
 
@@ -121,12 +126,9 @@ async function load() {
 
   // 역할 고르기 — 안 고르면 문장으로 짐작한다
   if (!$("who").children.length) {
-    $("who").innerHTML =
-      `<button data-r="" class="on">자동 판단</button>` +
-      (cur.roles || []).map(r => `<button data-r="${r.role}">${esc(r.display_name)}</button>`).join("");
-    $("who").querySelectorAll("button").forEach(b => b.onclick = () => {
-      role = b.dataset.r || null;
-      $("who").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    roleBar($("who"), {
+      roles: [{ role: "", display_name: "자동 판단" }, ...(cur.roles || [])],
+      onPick: (r) => { role = r || null; },
     });
   }
 
@@ -141,18 +143,10 @@ async function load() {
     : `돌고 있는 사이클이 없습니다. 「다음 사이클 주문으로」만 됩니다.`;
 }
 
-async function loadLog() {
-  try {
-    const ms = await api("/api/messages?limit=25");
-    $("log").innerHTML = (ms || []).slice(-25).reverse().map(m =>
-      `<div><span class="muted">${esc(m.from)}→${esc(m.to)}</span> ${esc(m.summary || "")}</div>`
-    ).join("") || `<div class="muted">아직 없습니다</div>`;
-  } catch { $("log").innerHTML = `<div class="muted">불러올 수 없습니다</div>`; }
-}
 
 $("src").onchange = () => show($("src").value);
 $("reload").onclick = () => show($("src").value);
-$("refresh").onclick = () => { load(); loadLog(); };
+$("refresh").onclick = () => load();
 
 async function send(mode) {
   const text = $("text").value.trim();
@@ -179,8 +173,7 @@ $("now").onclick = () => send("now");
 $("next").onclick = () => send("next");
 
 setWidth("full");
-load(); loadLog();
-setInterval(loadLog, 8000);
+load();
 </script>
 </body>
 </html>

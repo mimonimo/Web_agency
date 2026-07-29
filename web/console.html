@@ -49,8 +49,7 @@
 
   /* 오른쪽 */
   .side{display:flex;flex-direction:column;gap:.8rem;min-height:0;overflow-y:auto}
-  .agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.4rem,1fr));gap:.4rem}
-  .ag{display:block;text-decoration:none;color:var(--fg);background:#121824;border:1.5px solid var(--line);border-radius:9px;
+  .agents{margin-top:.2rem}
       padding:.45rem .55rem;font-size:.88rem;cursor:pointer}
   .ag:hover{border-color:#48587a}
   .ag.work{border-color:var(--run);background:#152036}
@@ -156,12 +155,12 @@ function drawNow() {
 function drawAgents() {
   const busy = {};
   running.forEach(s => s.roles.forEach(r => busy[r] = s.key));
-  $("agents").innerHTML = Object.entries(roles).map(([r, ko]) =>
-    `<a class="ag ${busy[r] ? "work" : ""}" href="/agent.html?role=${r}"
-        title="${esc(ko)} 상세 — 지시 추가·검사·재요청">
-       <div class="nm">${esc(ko)}</div>
-       <div class="st">${busy[r] ? "작업 중 " + esc(busy[r]) : "대기"}</div>
-     </a>`).join("");
+  // 공통 역할 선택기 — 누르면 에이전트 상세로 간다 (화면 일원화)
+  roleBar($("agents"), {
+    roles: Object.entries(roles).map(([r, ko]) => ({ role: r, display_name: ko })),
+    dot: (r) => !!busy[r],
+    badge: (r) => busy[r] ? busy[r] : "",
+  });
 }
 
 

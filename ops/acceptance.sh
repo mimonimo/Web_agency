@@ -467,11 +467,22 @@ print(d.get('id',''))" 2>/dev/null)
 
   # ★ 에이전트를 보는 화면은 하나여야 한다 (agent.html?role=…)
   #   콘솔에서도 지시문을 따로 띄우던 것을 없애고 상세 화면으로 일원화했다.
-  if grep -q 'href="/agent.html?role=' web/console.html \
-     && grep -q 'href="/agent.html?role=' web/assets/office.js; then
-    ok "★ 에이전트 클릭이 전부 agent.html?role= 로 간다"
+  # 공통 선택기의 기본 동작이 agent.html 로 가는가 + 픽셀 오피스 책상도 같은 곳으로
+  if grep -q 'location.href = `/agent.html?role=' web/assets/ui.js \
+     && grep -q 'href="/agent.html?role=' web/assets/office.js \
+     && grep -q 'roleBar(' web/console.html; then
+    ok "★ 에이전트 진입이 전부 agent.html?role= 로 간다"
   else
     ng "에이전트 진입 경로가 일원화되지 않았다"
+  fi
+
+  # 역할 선택기가 화면마다 따로 구현돼 있지 않은가
+  n=$(grep -l 'roleBar(' web/*.html | wc -l)
+  own=$(grep -c 'data-r="\${' web/*.html 2>/dev/null | grep -vc ":0" || true)
+  if [ "$n" -ge 4 ]; then
+    ok "역할 선택기를 $n 개 화면이 공통 컴포넌트로 쓴다"
+  else
+    ng "역할 선택기가 아직 화면마다 따로다 ($n 개만 공통)"
   fi
   if grep -q 'id="prompt"' web/agent.html && ! grep -q 'id="prompt"' web/console.html; then
     ok "받은 지시문은 에이전트 상세에서만 본다"

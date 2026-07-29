@@ -12,9 +12,6 @@
   .wrap{flex:1;display:grid;grid-template-columns:minmax(13rem,16rem) 1fr;
         gap:1rem;padding:1rem;min-height:0;align-items:start}
 
-  .roles{display:flex;flex-direction:column;gap:.35rem;
-         max-height:calc(100vh - 7rem);overflow-y:auto}
-  .roles button{display:flex;align-items:center;gap:.5rem;text-align:left;
     background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
     padding:.55rem .75rem;cursor:pointer;color:var(--fg);font:inherit;flex:none}
   .roles button:hover{background:var(--panel2)}
@@ -27,8 +24,7 @@
      세로 목록 그대로 두면 높이가 0으로 접혀 아무것도 안 보인다. */
   @media (max-width:960px){
     .wrap{grid-template-columns:1fr}
-    .roles{flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
-    .roles button{flex:0 0 auto}
+      .roles button{flex:0 0 auto}
     .roles button br{display:none}
   }
 
@@ -66,7 +62,6 @@
       <div class="tabs" id="tabs">
         <button data-t="spec" class="on">✏️ 이번 지시문 (고칠 수 있음)</button>
         <button data-t="base">📘 기준선 (읽기 전용)</button>
-        <button data-t="notes">✍️ 추가 지시</button>
         <button data-t="diff">🔍 초안과 비교</button>
       </div>
       <textarea class="box" id="body" spellcheck="false"></textarea>
@@ -82,7 +77,7 @@
 
 <script src="/assets/ui.js"></script>
 <script>
-let role = new URLSearchParams(location.search).get("role") || null;
+let role = currentRole(null);
 let tab = "spec", base = "", specs = [];
 
 nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/agent.html">🧑‍💻 에이전트</a>');
@@ -94,17 +89,17 @@ async function loadRoles() {
   const d = await api("/api/specs");
   specs = d.specs || [];
   $("prog").textContent = d.total ? `${d.customized} / ${d.total} 명이 고침` : "";
-  $("roles").innerHTML = specs.map(s =>
-    `<button data-r="${s.role}" class="${s.role === role ? "on" : ""}">
-       <span>${esc(s.role)}</span>
-       <span class="st ${s.status}">${s.status === "customized" ? "고침" : "초안"}</span>
-     </button>`).join("")
-    || `<div class="card"><div class="empty">아직 AGENT.md 가 없습니다.<br>
-         S2 기획 단계에서 만들어집니다.</div></div>`;
-  $("roles").querySelectorAll("button").forEach(b => b.onclick = () => {
-    role = b.dataset.r; history.replaceState(null, "", `?role=${role}`);
-    loadRoles(); load();
+  if (!specs.length) {
+    $("roles").innerHTML = `<div class="card"><div class="empty">아직 AGENT.md 가 없습니다.<br>
+      S2 기획 단계에서 만들어집니다.</div></div>`;
+    return;
+  }
+  roleBar($("roles"), {
+    roles: specs.map(x => ({ role: x.role, display_name: x.role })),
+    badge: (r) => (specs.find(x => x.role === r) || {}).status === "customized" ? "✓" : "",
+    onPick: (r) => { role = r; loadRoles(); load(); },
   });
+  $("roles").classList.add("col");
   if (!role && specs.length) role = specs[0].role;
 }
 
@@ -116,7 +111,7 @@ function paths(sp) {
      "★ 여기를 고치면 카운터가 오릅니다.",
      `/files.html?path=${encodeURIComponent("project-001/agents/" + role)}`],
     ["추가 지시", `project-001/agents/${role}/NOTES.md`,
-     "작업 도중 끼워 넣는 말. 다음 실행에 반영됩니다.", `/agent.html?role=${role}`],
+     "작업 도중 끼워 넣는 말 — 에이전트 화면에서 씁니다.", `/agent.html?role=${role}`],
   ];
   $("paths").innerHTML = rows.map(([k, p, why, link]) => `
     <b>${k}</b>
@@ -143,7 +138,7 @@ async function show(t) {
   tab = t;
   $("tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
   const ta = $("body"), pv = $("view");
-  const editable = (t === "spec" || t === "notes");
+  const editable = (t === "spec");
   ta.hidden = !editable; pv.hidden = editable;
   $("save").disabled = !editable; $("revert").disabled = !editable;
 
@@ -152,10 +147,6 @@ async function show(t) {
       base = String(await api(`/api/specs/${role}/raw`)).replace(FM, "");
       ta.value = base;
       $("hint").textContent = "저장하면 '고침' 이 되고, 11명이 다 채우면 사이클이 자동 재개됩니다.";
-    } else if (t === "notes") {
-      const n = await api(`/api/agents/${role}/notes`);
-      base = n.text || ""; ta.value = base;
-      $("hint").textContent = n.applies_when;
     } else if (t === "base") {
       pv.textContent = await api(`/api/specs/${role}/baseline`);
     } else {
@@ -185,10 +176,7 @@ $("save").onclick = () => act($("save"), async () => {
     return { note: r.resumed ? "저장했습니다 — 11/11 완료, 사이클을 재개합니다!"
                              : `저장했습니다 (${r.customized}/${r.total})` };
   }
-  await api(`/api/agents/${role}/notes`, {
-    method: "PUT", headers: { "Content-Type": "text/plain" }, body: v });
-  base = v;
-  return { note: v.trim() ? "지시를 저장했습니다. 다음 실행부터 반영됩니다." : "지시를 비웠습니다" };
+  throw new Error("이 탭은 읽기 전용입니다");
 }).catch(() => {});
 
 loadRoles().then(load);

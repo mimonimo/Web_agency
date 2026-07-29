@@ -10,14 +10,10 @@
         gap:1rem;padding:1rem;min-height:0}
   @media (max-width:1000px){
     .wrap{grid-template-columns:1fr}
-    .roles{flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
-    .roles button{flex:0 0 auto}
+      .roles button{flex:0 0 auto}
     .roles button br{display:none}
   }
 
-  .roles{display:flex;flex-direction:column;gap:.35rem;
-         max-height:calc(100vh - 7rem);overflow-y:auto}
-  .roles button{
     flex:none;display:flex;align-items:center;gap:.55rem;text-align:left;
     background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
     padding:.55rem .75rem;cursor:pointer;color:var(--fg);font:inherit;font-size:.99rem}
@@ -62,25 +58,20 @@
 
 <script src="/assets/ui.js"></script>
 <script>
-let list = [], role = new URLSearchParams(location.search).get("role") || "designer";
+let list = [], role = currentRole("designer");
 let D = null, C = null;
 
 nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/review.html">👀 보고 고치기</a>');
 
 async function loadRoles() {
   list = await api("/api/agents");
-  $("roles").innerHTML = list.map(r =>
-    `<button data-r="${r.role}" class="${r.role === role ? "on" : ""}">
-       <span class="dot" id="dot-${r.role}"></span>
-       <span>${esc(r.display_name)}<br>
-         <span class="muted" style="font-size:.82rem">${esc(r.role)}</span></span>
-       ${r.notes ? `<span class="n" title="사람이 넣은 지시 ${r.notes}건">${r.notes}</span>` : ""}
-     </button>`).join("");
-  $("roles").querySelectorAll("button").forEach(b => b.onclick = () => {
-    role = b.dataset.r;
-    history.replaceState(null, "", `?role=${role}`);
-    loadRoles(); load();
+  // 공통 역할 선택기 (assets/ui.js). 다섯 화면이 같은 것을 쓴다.
+  roleBar($("roles"), {
+    roles: list,
+    badge: (r) => (list.find(x => x.role === r) || {}).notes || "",
+    onPick: (r) => { role = r; loadRoles(); load(); },
   });
+  $("roles").classList.add("col");
 }
 
 async function load() {
@@ -90,7 +81,7 @@ async function load() {
   ]);
   cycleBadge($("cyc"));
   render();
-  const dot = $("dot-" + role); if (dot) dot.classList.toggle("up", D.node.status === "up");
+  
 }
 
 const li = (xs) => (xs || []).map(x => `<li>${esc(x)}</li>`).join("");
