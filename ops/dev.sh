@@ -13,7 +13,9 @@ LOG="$ROOT/repo/hq.log"
 # 화면에 띄울 주소. 실제 운영 IP 는 커밋하지 않는다 — .env 의 HQ_HOST 에서 읽는다.
 HQ_ADDR="$(grep -sE '^HQ_HOST=' .env 2>/dev/null | tail -1 | cut -d= -f2)"
 HQ_ADDR="${HQ_ADDR:-localhost}"
-PORT="${HQ_PORT:-8000}"
+# PORT / HQ_PORT 둘 다 받는다. 문서에는 PORT 로 안내돼 있는데
+# HQ_PORT 만 보고 있어 새 PC 에서 포트를 못 바꾸는 일이 있었다.
+PORT="${PORT:-${HQ_PORT:-8000}}"
 
 [ -f .env ] || cp .env.example .env
 
