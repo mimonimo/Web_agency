@@ -45,9 +45,12 @@ case "${1:-start}" in
   restart) "$0" stop; sleep 1; "$0" start ;;
   # artifacts-guard: 산출물이 얼마나 쌓여 있는지 알려준다
   sites)
-    # runs/ 뿐 아니라 showcase/ 도 본다
+    # runs/ 뿐 아니라 showcase/ 도 본다.
+    # ★ 사이트는 프론트엔드가 만든다. dba/backend 폴더의 index.html 은 역할 이탈이므로
+    #   목록에 띄우지 않는다 (HQ 의 /preview/sites 와 같은 규칙).
     find repo -name index.html -not -path "*/node_modules/*" -not -path "*/.archive/*" \
       2>/dev/null | sort \
+      | grep -vE "/(pm|planner|sales|sysadmin|designer|backend|dba|security|qa|customer)/" \
       | sed "s|^repo/|  http://${HQ_ADDR}:${PORT}/preview/|"
     ;;
   status)

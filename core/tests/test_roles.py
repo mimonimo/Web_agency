@@ -112,5 +112,34 @@ check("항목으로도 뽑힌다", any("버튼을 작게" in x for x in directiv
 directives.write("", "designer")
 check("비우면 사라진다", directives.block("designer") == "")
 
+print("\n[역할 경계 — 남의 파일을 만들지 않는가]")
+import tempfile, shutil as _sh
+tmp = pathlib.Path(tempfile.mkdtemp())
+(tmp / "seed.sql").write_text("INSERT INTO product VALUES ('빵', 8500);\n" * 4, encoding="utf-8")
+(tmp / "schema.sql").write_text(
+    "CREATE TABLE product (id INTEGER PRIMARY KEY, name TEXT, price INTEGER);\n"
+    "CREATE TABLE ord (id INTEGER PRIMARY KEY, pid INTEGER REFERENCES product(id), qty INTEGER);\n",
+    encoding="utf-8")
+clean = checks.check("dba", tmp, {})
+check("DBA 가 SQL 만 내면 통과", all(f.ok for f in clean if "화면 파일" in f.label))
+
+(tmp / "index.html").write_text("<html></html>", encoding="utf-8")
+dirty = checks.check("dba", tmp, {})
+web = [f for f in dirty if "화면 파일" in f.label]
+check("DBA 가 index.html 을 내면 잡힌다", web and not web[0].ok,
+      f"{[f.label for f in web]}")
+check("고치는 법이 붙어 있다", web and "프론트엔드" in web[0].fix)
+_sh.rmtree(tmp, ignore_errors=True)
+
+# runner 가 남의 역할 파일을 실제로 걸러 내는가
+from app import pipelines, runner as _runner
+_s5 = pipelines.load("web_delivery").step("S5")
+foreign = _runner._foreign_outputs(_s5, "dba")
+check("S5 에서 dba 의 '남의 파일' 목록에 index.html 이 있다", "index.html" in foreign,
+      f"{sorted(foreign)}")
+check("자기 파일(seed.sql)은 안 들어 있다", "seed.sql" not in foreign)
+check("frontend 기준으로는 seed.sql 이 남의 파일",
+      "seed.sql" in _runner._foreign_outputs(_s5, "frontend"))
+
 print(f"\n통과 {ok} · 실패 {ng}")
 sys.exit(1 if ng else 0)

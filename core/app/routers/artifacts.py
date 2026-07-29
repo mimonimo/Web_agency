@@ -156,11 +156,16 @@ async def list_sites():
     프론트엔드가 어느 경로에 index.html 을 만들지 미리 알 수 없으므로
     repo/ 안을 훑어 index.html 이 있는 디렉터리를 전부 모은다.
     """
+    from ..models import ROLES
     sites = []
     for idx in sorted(REPO_ROOT.rglob("index.html")):
         rel = idx.relative_to(REPO_ROOT)
         parts = rel.parts
         if any(p in ("node_modules", ".git", ".archive", "__pycache__") for p in parts):
+            continue
+        # 사이트는 프론트엔드가 만든다. DBA·백엔드 폴더의 index.html 은 역할 이탈이다.
+        owner = next((p for p in parts if p in ROLES), None)
+        if owner and owner != "frontend":
             continue
         d = rel.parent
         cycle = step = role = None

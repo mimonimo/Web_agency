@@ -994,21 +994,85 @@ async def _send_and_wait(cycle_id: int, sdef: Any, role: str, url: str,
     raise RuntimeError(f"{role}: 시간 초과 ({sdef.timeout_sec}초)")
 
 
+def _foreign_outputs(sdef: Any, role: str) -> set[str]:
+    """같은 단계의 **다른 역할**이 만들기로 한 파일 이름.
+
+    ★ DBA 가 `seed.sql` 만 내야 하는데 `index.html`·`style.css`·`app.js` 까지
+      통째로 만들어 낸 일이 실제로 있었다. 모델이 "도와주려고" 남의 일을 한 것이다.
+      그러면 같은 파일이 두 벌 생기고, 어느 것이 진짜인지 아무도 모른다.
+      역할 경계는 부탁이 아니라 코드로 막는다.
+    """
+    mine = set(sdef.outputs_for(role))
+    out: set[str] = set()
+    for r in sdef.roles:
+        if r == role:
+            continue
+        out |= {Path(o).name for o in sdef.outputs_for(r) if "*" not in o}
+    return {n for n in out if n not in mine}
+
+
+def _input_names(cycle_id: int, sdef: Any) -> dict[str, str]:
+    """이 단계에 실어 보낸 참고 자료 {파일이름: 내용}.
+
+    노드 어댑터는 참고 자료를 작업 디렉터리에 내려놓고 일한다. 그러다 보니
+    **읽으라고 준 파일이 만들었다고 올라온다.** 산출물이 아니므로 걸러 낸다.
+    """
+    out: dict[str, str] = {}
+    for rel in resolve_inputs(cycle_id, sdef.inputs):
+        p = REPO_ROOT / rel
+        try:
+            out[p.name] = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+    return out
+
+
 def _save_artifacts(cycle_id: int, sdef: Any, role: str, t: Any,
                     out_dir: Path) -> list[str]:
-    """노드가 만든 산출물을 repo/ 에 기록한다 (BRIEF §3.5 경로 규약)."""
+    """노드가 만든 산출물을 repo/ 에 기록한다 (BRIEF §3.5 경로 규약).
+
+    두 가지를 걸러 낸다 — 둘 다 실제로 겪은 일이다.
+      1. 남의 역할 파일 (DBA 가 index.html 을 만들어 올린다)
+      2. 참고 자료가 그대로 되돌아온 것 (SCREENS.md 를 읽으라고 줬더니 산출물로 온다)
+    """
     saved: list[str] = []
     role_dir = out_dir / role if len(sdef.roles) > 1 else out_dir
     role_dir.mkdir(parents=True, exist_ok=True)
+
+    foreign = _foreign_outputs(sdef, role)
+    given = _input_names(cycle_id, sdef)
+    dropped: list[str] = []
 
     for a in t.artifacts:
         name = str(a.get("name", "")).lstrip("/")
         if not name or ".." in name:
             continue
+        body = a.get("text", "")
+        base = Path(name).name
+
+        if base in foreign:
+            dropped.append(f"{name}(남의 역할)")
+            continue
+        if base in given and body.strip() == given[base].strip():
+            dropped.append(f"{name}(참고자료 반송)")
+            continue
+
         p = role_dir / name
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(a.get("text", ""), encoding="utf-8")
+        p.write_text(body, encoding="utf-8")
         saved.append(str(p.relative_to(REPO_ROOT)))
+
+    if dropped:
+        # 조용히 버리면 "왜 파일이 없지" 가 된다. 버린 사실과 이유를 남긴다.
+        db = SessionLocal()
+        try:
+            services.mirror(db, cycle_id, "hq", role, "response",
+                            f"{sdef.id} 산출물 {len(dropped)}건 제외 — {', '.join(dropped[:4])}")
+            audit(db, "hq", "step.artifacts_dropped", f"cycle:{cycle_id}:{sdef.id}",
+                  {"role": role, "dropped": dropped[:10]})
+            db.commit()
+        finally:
+            db.close()
 
     if t.report:
         rp = REPO_ROOT / "runs" / str(cycle_id) / sdef.id / (

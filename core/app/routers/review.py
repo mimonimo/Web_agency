@@ -90,9 +90,15 @@ def _sites(cycle_id: int | None) -> list[dict]:
             d = idx.parent
             if d in seen:
                 continue
-            seen.add(d)
             rel = d.relative_to(REPO_ROOT)
             parts = rel.parts
+            # ★ 사이트는 프론트엔드가 만든다. DBA·백엔드 폴더에 index.html 이
+            #   생기는 것은 역할 이탈이지 결과물이 아니다 — 목록에 띄우지 않는다.
+            #   (runner 가 애초에 걸러 내지만, 예전 사이클의 산출물도 여기 남아 있다)
+            owner = next((p for p in parts if p in ROLES), None)
+            if owner and owner != "frontend":
+                continue
+            seen.add(d)
             out.append({
                 "dir": str(rel),
                 "url": f"/preview/{rel}/index.html",

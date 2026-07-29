@@ -191,7 +191,7 @@ def _frontend(d: Path, screens: int = 0) -> list[Finding]:
 
 
 def _backend(d: Path) -> list[Finding]:
-    f: list[Finding] = []
+    f: list[Finding] = _no_web_files(d, "백엔드")
     api = _find(d, "api-contract.yaml") or _find(d, "api-contract.yml")
     srv = _find(d, "server.js")
     if api is not None:
@@ -223,8 +223,21 @@ def _backend(d: Path) -> list[Finding]:
     return f
 
 
+def _no_web_files(d: Path, role: str) -> list[Finding]:
+    """화면 파일을 만들지 않았는가.
+
+    ★ DBA 가 `seed.sql` 만 내야 하는데 사이트 한 벌을 통째로 만든 일이 있었다.
+      같은 파일이 두 벌 생기면 어느 것이 진짜인지 아무도 모른다.
+    """
+    bad = [p.name for p in d.rglob("*")
+           if p.is_file() and p.suffix.lower() in (".html", ".htm", ".css")]
+    return [Finding(not bad, "화면 파일을 만들지 않았다", f"{bad[:3]}",
+                    f"{role} 는 화면을 만들지 않는다. 그건 프론트엔드의 일이다. "
+                    f"html·css 파일을 지우고 내 산출물만 내라")]
+
+
 def _dba(d: Path) -> list[Finding]:
-    f: list[Finding] = []
+    f: list[Finding] = _no_web_files(d, "DBA")
     sc = _find(d, "schema.sql")
     sd = _find(d, "seed.sql")
     if sc is not None:
