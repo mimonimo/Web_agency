@@ -48,6 +48,88 @@ def kick(cycle_id: int) -> None:
     _TASKS[cycle_id] = asyncio.create_task(_drive(cycle_id))
 
 
+# ★ 「지금 고치기」 예약함.
+#   사이클이 돌고 있는 동안에는 단계를 다시 시킬 수 없다 (한 사이클에 실행기 하나).
+#   그렇다고 사람에게 "끝날 때까지 기다렸다가 다시 누르세요" 라고 할 수는 없다.
+#   그래서 예약해 두고 지금 단계가 끝나는 순간 실행기가 스스로 처리한다.
+#   {cycle_id: [(role, step_key|None, note), ...]}
+_RERUN: dict[int, list[tuple[str, str | None, str]]] = {}
+
+
+def queue_rerun(cycle_id: int, role: str, step_key: str | None, note: str) -> None:
+    _RERUN.setdefault(cycle_id, []).append((role, step_key, note))
+
+
+def pending_rerun(cycle_id: int) -> list[tuple[str, str | None, str]]:
+    return list(_RERUN.get(cycle_id, ()))
+
+
+def _apply_pending_rerun(db: Any, cycle: Any) -> bool:
+    """예약된 재요청을 처리한다. 되감았으면 True.
+
+    되감기 지점은 **가장 앞선 단계**로 잡는다 — 디자인과 프론트엔드를 둘 다
+    고쳐 달라고 했으면 디자인부터 다시 해야 프론트엔드가 그 결과를 본다.
+    """
+    import shutil
+
+    from .models import Artifact
+
+    items = _RERUN.pop(cycle.id, None)
+    if not items:
+        return False
+
+    pl = pipelines.load(cycle.pipeline)
+    steps = db.scalars(select(Step).where(Step.cycle_id == cycle.id)
+                       .order_by(Step.id)).all()
+    order = {s.step_key: i for i, s in enumerate(steps)}
+
+    targets: list[Step] = []
+    for role, want, note in items:
+        pick = None
+        for s in reversed(steps):
+            if want and s.step_key != want:
+                continue
+            d = pl.step(s.step_key)
+            rs = list(d.roles) if d else ([s.role] if s.role else [])
+            if role in rs and s.status in (StepStatus.DONE, StepStatus.FAILED,
+                                           StepStatus.REJECTED):
+                pick = s
+                break
+        if pick is None:
+            # 그 역할이 아직 일한 적이 없다 — 지시만 남는다. 처음 일할 때 반영된다.
+            services.mirror(db, cycle.id, "pm", role, "request",
+                            f"{note} (아직 차례가 아니라 다음 작업에 반영된다)")
+            continue
+        targets.append(pick)
+        services.mirror(db, cycle.id, "pm", role, "request", note)
+
+    if not targets:
+        db.commit()
+        return False
+
+    first = min(targets, key=lambda s: order.get(s.step_key, 0))
+    for s in steps:
+        if order.get(s.step_key, 0) < order.get(first.step_key, 0):
+            continue
+        if s.status in (StepStatus.DONE, StepStatus.FAILED, StepStatus.REJECTED):
+            s.status = StepStatus.PENDING
+            s.error = None
+            s.output_ref = None
+            s.started_at = s.ended_at = None
+            run_dir = REPO_ROOT / "runs" / str(cycle.id) / s.step_key
+            shutil.rmtree(run_dir, ignore_errors=True)
+            db.execute(Artifact.__table__.delete().where(
+                Artifact.cycle_id == cycle.id, Artifact.step_id == s.id))
+
+    cycle.current_step = first.step_key
+    audit(db, "pm", "cycle.rerun_applied", f"cycle:{cycle.id}",
+          {"from_step": first.step_key, "roles": [r for r, _, _ in items]})
+    services.mirror(db, cycle.id, "hq", "pm", "response",
+                    f"수정 요청 반영 — {first.step_key} 부터 다시 만든다")
+    db.commit()
+    return True
+
+
 async def _drive(cycle_id: int) -> None:
     """RUNNING 인 동안 step 을 하나씩 실행한다."""
     guard = 0
@@ -132,6 +214,12 @@ async def _drive(cycle_id: int) -> None:
                         if t.action is Action.INVALIDATE_FROM:
                             continue          # 되감긴 지점부터 다시 돈다
                         return
+
+            # ★ 사람이 「지금 고치기」를 눌러 둔 것이 있으면 여기서 처리한다.
+            #   돌고 있는 도중에는 재요청을 받을 수 없으므로 예약해 두고,
+            #   지금 단계가 끝난 이 자리에서 되감아 준다. 사람이 다시 누르지 않아도 된다.
+            if _apply_pending_rerun(db, cycle):
+                continue
 
             t = next_step(cv, sv, Event.STEP_DONE, {"step": key})
             services.apply(db, cycle, t)

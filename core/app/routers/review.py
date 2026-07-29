@@ -233,40 +233,48 @@ async def request_change(body: ReviseIn, db: Session = Depends(get_db)):
 
 
 def _fix_now(db: Session, text: str, role: str, step_key: str | None) -> dict:
-    """지시를 꽂고 → 필요하면 일시정지하고 → 그 단계만 다시 돌린다."""
+    """지시를 꽂고 → 그 역할의 단계를 다시 돌린다.
+
+    ★ 사이클이 **돌고 있을 때가 핵심**이다. 한 사이클에 실행기는 하나뿐이라
+      돌아가는 도중에는 단계를 다시 시킬 수 없다. 그렇다고 사람에게
+      "지금 단계가 끝나면 다시 눌러 주세요" 라고 할 수는 없다.
+      → 예약해 두고, 실행기가 현재 단계를 마치는 순간 스스로 되감는다.
+    """
     c = _latest_cycle(db)
     if c is None:
         raise HTTPException(404, "돌고 있는 사이클이 없다. 「다음 사이클 주문으로」를 써라")
 
     directives.append(text, role, who="pm")
     services.audit(db, "pm", "review.fix_now", f"cycle:{c.id}:{role}",
-                   {"text": text[:200]})
+                   {"text": text[:200], "step": step_key})
     db.commit()
 
     status = c.status.value if hasattr(c.status, "value") else str(c.status)
-    paused = False
+    note = f"수정 요청 — {text[:80]}"
+
     if status == "RUNNING":
-        # 재요청은 RUNNING 중에 받지 않는다. 사람이 두 번 누르지 않게 여기서 대신 멈춘다.
-        cv, sv = services.snapshot(db, c)
-        t = next_step(cv, sv, Event.PAUSE)
-        services.apply(db, c, t, actor="pm")
+        runner.queue_rerun(c.id, role, step_key, note)
+        services.mirror(db, c.id, "pm", role, "request",
+                        f"{note} (지금 단계가 끝나면 바로 반영된다)")
         db.commit()
-        paused = True
+        return {"ok": True, "data": {
+            "role": role, "applied": "queued", "paused": False,
+            "note": f"{ROLE_DISPLAY[role]} 에게 지시를 넣었다. "
+                    f"지금 도는 단계가 끝나는 즉시 자동으로 다시 만든다 — "
+                    f"기다렸다가 다시 누를 필요 없다."}}
 
     try:
-        res = agents_router.rerun_role_step(
-            db, role, c.id, step_key,
-            note=f"수정 요청 — {text[:80]}")
+        res = agents_router.rerun_role_step(db, role, c.id, step_key, note=note)
     except HTTPException as e:
-        # 다시 돌릴 단계가 없으면(아직 그 역할이 일한 적 없음) 지시만 남는다.
-        # 그 역할이 처음 일할 때 자동으로 반영되므로 실패가 아니다.
+        # 그 역할이 아직 일한 적이 없으면 다시 돌릴 단계가 없다.
+        # 지시는 남으므로 처음 일할 때 반영된다. 실패가 아니다.
         return {"ok": True, "data": {
-            "role": role, "applied": "pending", "paused": paused,
+            "role": role, "applied": "pending", "paused": False,
             "note": f"{ROLE_DISPLAY[role]} 에게 지시를 남겼다. "
-                    f"그 역할이 다음에 일할 때 반영된다. ({e.detail})"}}
+                    f"그 역할이 처음 일할 때 반영된다. ({e.detail})"}}
 
     return {"ok": True, "data": {
-        **res["data"], "role": role, "applied": "rerun", "paused": paused,
+        **res["data"], "role": role, "applied": "rerun", "paused": False,
         "note": f"{ROLE_DISPLAY[role]} 에게 지시를 넣고 {res['data']['step']} 를 다시 시켰다. "
                 f"몇 분 뒤 프리뷰를 새로고침해라."}}
 
