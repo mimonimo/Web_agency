@@ -49,6 +49,9 @@
   .steps td{padding:.4rem .3rem;border-bottom:1px solid #232b3a}
   .msg{max-height:14rem;overflow-y:auto;font-size:.92rem}
   .msg div{padding:.3rem 0;border-bottom:1px solid #232b3a}
+  pre.prompt{margin:0;white-space:pre-wrap;font-size:.88rem;line-height:1.6;
+    max-height:30rem;overflow:auto;background:#0f131b;border:1px solid var(--line);
+    border-radius:8px;padding:.75rem;font-family:ui-monospace,"D2Coding",monospace}
 </style>
 </head>
 <body>
@@ -184,6 +187,19 @@ function render() {
   </div>
 
   <div class="card">
+    <h3>📜 이 에이전트가 받은 지시문
+      <span class="act">
+        <span class="muted" id="pmeta"></span>
+        <button class="btn sm" id="pshow">보기</button>
+      </span></h3>
+    <p class="muted" style="margin:.1rem 0 .5rem">
+      "무슨 일을 시켰길래 저런 결과가 나왔나" 를 눈으로 봐야
+      지시문을 고칠 마음이 생깁니다. 기준선 + 품질기준 + 목표·완료조건 +
+      <b>사람이 추가한 지시</b>가 합쳐진 최종 본문입니다.</p>
+    <pre class="prompt" id="prompt" hidden></pre>
+  </div>
+
+  <div class="card">
     <h3>💬 주고받은 말</h3>
     <div class="msg">${(D.messages || []).slice().reverse().map(m =>
       `<div><span class="muted">${esc(m.from)}→${esc(m.to)}</span> ${esc(m.summary || "")}</div>`).join("")
@@ -232,6 +248,19 @@ function wire() {
     if (!d.cycle) throw new Error("사이클이 없습니다");
     return api(`/api/cycles/${d.cycle.id}/pause`, { method: "POST" });
   }, "일시정지 요청 — 현재 단계를 마치고 멈춥니다").then(load).catch(() => {});
+
+  $("pshow").onclick = () => act($("pshow"), async () => {
+    const box = $("prompt");
+    if (!box.hidden) { box.hidden = true; return { note: "닫았습니다" }; }
+    const d = await api(`/api/activity/prompt?role=${role}`);
+    $("pmeta").innerHTML = d.step
+      ? `${esc(d.step)} ${esc(d.step_name || "")} · 참고자료 ${(d.inputs || []).length}건 · 산출 ${(d.outputs || []).join(", ") || "-"}`
+      : esc(d.note || "");
+    box.textContent = (d.order ? `[주문서]\n${d.order}\n\n${"─".repeat(40)}\n\n` : "")
+                    + (d.instruction || "(지시문 없음)");
+    box.hidden = false;
+    return { note: `${(d.instruction || "").length}자` };
+  }).catch(() => {});
 
   const retry = (step, btn) => act(btn, () =>
     api(`/api/agents/${role}/retry${step ? "?step_key=" + encodeURIComponent(step) : ""}`,

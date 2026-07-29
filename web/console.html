@@ -50,16 +50,13 @@
   /* 오른쪽 */
   .side{display:flex;flex-direction:column;gap:.8rem;min-height:0;overflow-y:auto}
   .agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.4rem,1fr));gap:.4rem}
-  .ag{background:#121824;border:1.5px solid var(--line);border-radius:9px;
+  .ag{display:block;text-decoration:none;color:var(--fg);background:#121824;border:1.5px solid var(--line);border-radius:9px;
       padding:.45rem .55rem;font-size:.88rem;cursor:pointer}
   .ag:hover{border-color:#48587a}
   .ag.work{border-color:var(--run);background:#152036}
   .ag .nm{font-weight:700}
   .ag .st{color:var(--dim);font-size:.82rem}
   .ag.work .st{color:#93c5fd}
-  pre.prompt{margin:0;white-space:pre-wrap;font-size:.86rem;line-height:1.6;
-    max-height:26rem;overflow:auto;background:#0f131b;border:1px solid var(--line);
-    border-radius:8px;padding:.7rem;font-family:ui-monospace,"D2Coding",monospace}
 </style>
 </head>
 <body>
@@ -86,13 +83,17 @@
         <div class="agents" id="agents"></div>
       </div>
       <div class="card">
-        <h3>📜 <span id="ptitle">받은 지시문</span>
-          <span class="act"><button class="btn sm" id="pclose">닫기</button></span></h3>
-        <div class="muted" id="pmeta" style="margin-bottom:.4rem"></div>
-        <pre class="prompt" id="prompt">에이전트를 누르면 그가 실제로 받은 지시문이 여기 나옵니다.
-
-"무슨 일을 시켰길래 저런 결과가 나왔나" 를 눈으로 봐야
-지시문을 고칠 마음이 생깁니다. 그게 이 수업의 목적입니다.</pre>
+        <h3>🔗 바로 가기</h3>
+        <p class="muted" style="margin:.1rem 0 .6rem">
+          에이전트를 누르면 <b>상세 화면</b>으로 갑니다 —
+          목표·완료조건, 지시 추가, 산출물 검사, ↻재요청,
+          그리고 <b>그가 실제로 받은 지시문</b>을 거기서 봅니다.</p>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <a class="btn sm" href="/agent.html">🧑‍💻 에이전트 상세</a>
+          <a class="btn sm" href="/review.html">👀 보고 고치기</a>
+          <a class="btn sm" href="/projects.html">📦 작업물</a>
+          <a class="btn sm" href="/board.html">🎫 티켓</a>
+        </div>
       </div>
     </aside>
   </div>
@@ -156,29 +157,13 @@ function drawAgents() {
   const busy = {};
   running.forEach(s => s.roles.forEach(r => busy[r] = s.key));
   $("agents").innerHTML = Object.entries(roles).map(([r, ko]) =>
-    `<div class="ag ${busy[r] ? "work" : ""}" data-r="${r}">
+    `<a class="ag ${busy[r] ? "work" : ""}" href="/agent.html?role=${r}"
+        title="${esc(ko)} 상세 — 지시 추가·검사·재요청">
        <div class="nm">${esc(ko)}</div>
        <div class="st">${busy[r] ? "작업 중 " + esc(busy[r]) : "대기"}</div>
-     </div>`).join("");
-  $("agents").querySelectorAll(".ag").forEach(a =>
-    a.onclick = () => showPrompt(a.dataset.r));
+     </a>`).join("");
 }
 
-async function showPrompt(role) {
-  $("ptitle").textContent = `${roles[role] || role} 가 받은 지시문`;
-  $("prompt").textContent = "불러오는 중…";
-  try {
-    const d = await api(`/api/activity/prompt?role=${role}`);
-    $("pmeta").innerHTML = d.step
-      ? `<b>${esc(d.step)}</b> ${esc(d.step_name || "")} · 작업 <code>${esc(d.task)}</code>
-         · 참고자료 ${(d.inputs || []).length}건 · 산출 ${(d.outputs || []).join(", ") || "-"}`
-      : esc(d.note || "");
-    $("prompt").textContent =
-      (d.order ? `[주문서]\n${d.order}\n\n${"─".repeat(40)}\n\n` : "") +
-      (d.instruction || "(지시문 없음)");
-  } catch (e) { $("prompt").textContent = e.message; }
-}
-$("pclose").onclick = () => { $("prompt").textContent = "에이전트를 누르면 그가 받은 지시문이 나옵니다."; $("pmeta").textContent = ""; };
 
 async function poll() {
   try {

@@ -465,6 +465,20 @@ print(d.get('id',''))" 2>/dev/null)
     fi
   fi
 
+  # ★ 에이전트를 보는 화면은 하나여야 한다 (agent.html?role=…)
+  #   콘솔에서도 지시문을 따로 띄우던 것을 없애고 상세 화면으로 일원화했다.
+  if grep -q 'href="/agent.html?role=' web/console.html \
+     && grep -q 'href="/agent.html?role=' web/assets/office.js; then
+    ok "★ 에이전트 클릭이 전부 agent.html?role= 로 간다"
+  else
+    ng "에이전트 진입 경로가 일원화되지 않았다"
+  fi
+  if grep -q 'id="prompt"' web/agent.html && ! grep -q 'id="prompt"' web/console.html; then
+    ok "받은 지시문은 에이전트 상세에서만 본다"
+  else
+    ng "지시문 화면이 두 곳에 있다"
+  fi
+
   # 작업물이 사이클별로 묶여 나오는가
   n=$(curl -sf "$HQ/api/review/projects" | "$PY_BIN" -c "
 import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
