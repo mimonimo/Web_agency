@@ -27,10 +27,6 @@
 
   .detail{display:flex;flex-direction:column;gap:1rem;min-height:0;overflow-y:auto}
   .pages{display:flex;gap:.4rem;flex-wrap:wrap}
-  .pages button{
-    background:var(--panel2);border:1.5px solid var(--line);color:var(--fg);
-    border-radius:9px;padding:.45rem .85rem;cursor:pointer;font:inherit;font-size:.95rem}
-  .pages button.on{background:#1b2740;border-color:#33507f}
   .pages button .k{color:var(--dim);font-size:.82rem;margin-left:.35em}
   .frame{width:100%;min-height:32rem;border:0;border-radius:8px;background:#fff}
   .siteblk{border-top:1px solid var(--line);padding-top:.8rem;margin-top:.3rem}
@@ -96,7 +92,7 @@ function pick(i) {
           <a class="btn sm" href="/files.html?path=${encodeURIComponent(s.dir)}">🗂 파일</a>
         </span></h3>
       <div class="pages">${s.pages.map((p, pi) =>
-        `<button data-si="${si}" data-pi="${pi}" class="${p.main ? "on" : ""}">
+        `<button class="btn sm ${p.main ? "on" : ""}" data-si="${si}" data-pi="${pi}">
            ${p.main ? "🏠 " : "📄 "}${esc(p.title)}<span class="k">${esc(p.name)}</span>
          </button>`).join("") || `<span class="muted">페이지 없음</span>`}</div>
       <iframe class="frame" id="f${si}" title="${esc(s.dir)} 미리보기"

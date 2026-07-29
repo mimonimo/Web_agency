@@ -16,6 +16,7 @@
   .srcbar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem}
   .srcbar select{max-width:26rem}
   .devices{display:flex;gap:.3rem}
+  .devices .btn.on{background:#1b2740;border-color:#3d6099;color:var(--fg)}
   .frame.mobile{max-width:390px;margin:0 auto;box-shadow:0 0 0 8px #000,0 0 0 10px #333}
   .frame.tablet{max-width:820px;margin:0 auto}
 
@@ -102,7 +103,7 @@ function setWidth(kind) {
   const f = $("frame");
   f.className = "frame" + (kind === "full" ? "" : " " + kind);
   document.querySelectorAll(".devices .btn").forEach(b =>
-    b.classList.toggle("primary", b.dataset.w === kind));
+    b.classList.toggle("on", b.dataset.w === kind));
 }
 document.querySelectorAll(".devices .btn").forEach(b =>
   b.onclick = () => setWidth(b.dataset.w));

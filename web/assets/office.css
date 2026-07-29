@@ -343,3 +343,147 @@ textarea.box:focus,input.box:focus,select.box:focus{
 .rolebar.col button{border-radius:10px;justify-content:flex-start;width:100%}
 @media (max-width:1000px){ .rolebar.col{flex-direction:row;flex-wrap:wrap}
   .rolebar.col button{width:auto} }
+
+/* ═══════════════════════════════════════════════════════════════════
+   UI 체계 — 버튼·간격·레이아웃을 하나로
+
+   여기 오기 전까지 버튼이 6종류(.btn / .controls button / .tabs button /
+   .quick a / .navto a / .rolebar button)였고 모서리 반경이 7가지였다.
+   화면마다 눌리는 것의 크기와 모양이 달라 "조잡하다" 는 인상을 준다.
+
+   ★ 이 블록은 파일 맨 끝에 있어 앞의 임시 규칙들을 덮는다.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* 간격 — 이 다섯 개만 쓴다 */
+  --s1:.35rem; --s2:.6rem; --s3:.9rem; --s4:1.3rem; --s5:2rem;
+  /* 모서리 — 세 개만 쓴다 */
+  --r-sm:8px; --r-md:12px; --r-pill:999px;
+  --ring:0 0 0 3px rgba(96,165,250,.35);
+  --lift:0 1px 0 rgba(255,255,255,.04) inset, 0 2px 8px rgba(0,0,0,.28);
+}
+
+/* ── 누를 수 있는 것 전부 ─────────────────────────────────────── */
+.btn,
+.controls button,
+.tabs button,
+.quick a,
+.navto a,
+.rolebar button,
+.pages button{
+  --h:2.35rem;
+  display:inline-flex;align-items:center;justify-content:center;gap:.45em;
+  min-height:var(--h);padding:0 .95rem;
+  background:var(--panel2);color:var(--fg);
+  border:1.5px solid var(--line);border-radius:var(--r-sm);
+  font:inherit;font-size:.96rem;font-weight:650;line-height:1;
+  text-decoration:none;cursor:pointer;white-space:nowrap;
+  box-shadow:var(--lift);
+  transition:background .13s ease, border-color .13s ease,
+             transform .08s ease, box-shadow .13s ease;
+}
+.btn:hover:not(:disabled),
+.controls button:hover:not(:disabled),
+.tabs button:hover,
+.quick a:hover,
+.navto a:hover,
+.rolebar button:hover,
+.pages button:hover{
+  background:#2b3850;border-color:#4a5c80;color:var(--fg);
+}
+.btn:active:not(:disabled),
+.controls button:active:not(:disabled),
+.rolebar button:active,
+.pages button:active{ transform:translateY(1px);box-shadow:none }
+
+.btn:focus-visible,
+.controls button:focus-visible,
+.tabs button:focus-visible,
+.quick a:focus-visible,
+.navto a:focus-visible,
+.rolebar button:focus-visible,
+.pages button:focus-visible,
+.navlink:focus-visible,
+input.box:focus-visible,
+select.box:focus-visible,
+textarea.box:focus-visible{ outline:none;box-shadow:var(--ring) }
+
+.btn:disabled,.controls button:disabled{
+  opacity:.38;cursor:not-allowed;box-shadow:none;
+}
+
+/* 크기 */
+.btn.sm{ --h:1.9rem;padding:0 .7rem;font-size:.88rem;border-radius:7px }
+.btn.lg{ --h:2.9rem;padding:0 1.3rem;font-size:1.05rem;border-radius:var(--r-md) }
+
+/* 종류 — 색으로만 구분하지 않고 굵기도 다르게 한다 */
+.btn.primary{ background:var(--run);color:#0b1220;border-color:#7db1fb;font-weight:800 }
+.btn.primary:hover:not(:disabled){ background:#7cb4fb;border-color:#a3caff }
+.btn.good{ background:#1d3a29;border-color:#37764f;color:#c6f6d5 }
+.btn.good:hover:not(:disabled){ background:#255036;border-color:#48915f }
+.btn.danger,.controls .danger{ background:#3a1f24;border-color:#7a3a3a;color:#ffcfcf }
+.btn.danger:hover:not(:disabled),
+.controls .danger:hover:not(:disabled){ background:#4d2830;border-color:#9c4a4a }
+.btn.ghost{ background:transparent;box-shadow:none }
+.btn.ghost:hover:not(:disabled){ background:var(--panel2) }
+
+/* 상태 표시가 필요한 것들 */
+.tabs button,.rolebar button{ background:transparent;box-shadow:none;color:var(--dim) }
+.tabs button.on,.rolebar button.on{
+  background:#1b2740;color:var(--fg);border-color:#3d6099;box-shadow:var(--lift);
+}
+.rolebar button{ border-radius:var(--r-pill);padding:0 .8rem }
+.rolebar.col button{ border-radius:var(--r-sm);justify-content:flex-start;padding:0 .75rem }
+.pages button.on{ background:#1b2740;border-color:#3d6099 }
+
+/* 상단 바 안의 버튼은 조금 크게 — 프로젝터에서 눌러야 한다 */
+.controls button{ --h:2.6rem;padding:0 1.1rem;font-size:1rem }
+
+/* ── 입력 ─────────────────────────────────────────────────────── */
+input.box,select.box,textarea.box{
+  min-height:2.35rem;border-radius:var(--r-sm);
+  transition:border-color .13s ease, box-shadow .13s ease;
+}
+input.box:focus,select.box:focus,textarea.box:focus{
+  outline:none;border-color:var(--run);box-shadow:var(--ring);
+}
+select.box{ appearance:none;padding-right:2rem;
+  background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),
+                   linear-gradient(135deg,var(--dim) 50%,transparent 50%);
+  background-position:calc(100% - 1.1rem) 55%, calc(100% - .8rem) 55%;
+  background-size:6px 6px,6px 6px;background-repeat:no-repeat;
+}
+label{ cursor:pointer }
+
+/* ── 카드·머리글 — 간격을 한 척도로 ──────────────────────────── */
+.card{ padding:var(--s3);border-radius:var(--r-md) }
+.card h3{
+  margin:0 0 var(--s2);font-size:1.02rem;font-weight:750;color:var(--fg);
+  display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;
+  padding-bottom:var(--s2);border-bottom:1px solid var(--line);
+}
+.card h3 .act{ margin-left:auto;display:flex;gap:var(--s1);align-items:center;flex-wrap:wrap }
+.card + .card{ margin-top:0 }
+
+/* ── 목록 항목 — 눌리는 높이를 확보한다 ──────────────────────── */
+.list a,.files a,.recent a{ min-height:2.2rem;border-radius:6px;padding:.4rem .5rem }
+.list a:hover,.files a:hover,.recent a:hover{ background:#1b2434 }
+
+/* ── 상단 내비 ────────────────────────────────────────────────── */
+.navlink{ min-height:2.1rem;display:inline-flex;align-items:center;border-radius:var(--r-sm) }
+.navbar{ padding:.6rem 1rem;gap:.7rem }
+
+/* ── 스크롤바 (어두운 화면에서 흰 막대가 튄다) ──────────────── */
+*{ scrollbar-width:thin;scrollbar-color:#334 transparent }
+*::-webkit-scrollbar{ width:10px;height:10px }
+*::-webkit-scrollbar-thumb{ background:#2c3850;border-radius:99px }
+*::-webkit-scrollbar-thumb:hover{ background:#3d4d6e }
+*::-webkit-scrollbar-track{ background:transparent }
+
+/* ── 작은 화면 ────────────────────────────────────────────────── */
+@media (max-width:720px){
+  .card{ padding:var(--s2) }
+  .controls{ width:100%;justify-content:stretch }
+  .controls button{ flex:1 1 auto }
+  .navextra{ width:100%;margin-left:0 }
+}
