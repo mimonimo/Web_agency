@@ -22,7 +22,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from . import directives, pipelines, services
+from . import checks, directives, pipelines, services
 from . import roles as roles_catalog
 from .db import SessionLocal
 from .models import Cycle, CycleStatus, ROLE_DISPLAY, ROLES, Step, StepStatus
@@ -580,12 +580,92 @@ def _order_text(cycle_id: int) -> str:
         db.close()
 
 
+# 완료 조건을 못 지켰을 때 몇 번까지 다시 시킬지.
+# 0 이면 검사만 하고 재실행하지 않는다 (시간이 급한 수업용).
+CHECK_RETRY = int(os.getenv("CHECK_RETRY", "1"))
+
+
 async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
                     out_dir: Path) -> list[str]:
-    """역할 하나에게 작업을 보내고 끝날 때까지 폴링한다."""
+    """역할 하나에게 작업을 보내고, 결과를 **검사하고**, 미달이면 다시 시킨다.
+
+    ★ 이 재실행 루프가 "어떤 모델을 붙여도 바닥이 유지된다" 의 실체다.
+      모델에게 부탁하는 대신, 확인하고 무엇이 틀렸는지 알려 주며 다시 시킨다.
+      `checks.py` 가 보는 것은 형식·존재·수치뿐이다. 의미는 게이트가 본다.
+    """
     from . import a2a_client as a2a
 
+    fix_note = ""
+    findings: list[checks.Finding] = []
+    saved: list[str] = []
+
+    for attempt in range(CHECK_RETRY + 1):
+        saved = await _send_and_wait(cycle_id, sdef, role, url, out_dir, fix_note,
+                                     attempt, a2a)
+
+        findings = checks.check(role, _role_out_dir(sdef, role, out_dir),
+                                {"screens": _screen_count(cycle_id)})
+        bad = checks.failures(findings)
+        ok, total = checks.score(findings)
+        if not bad:
+            if total:
+                _log_check(cycle_id, sdef, role, ok, total, [])
+            return saved
+        if attempt >= CHECK_RETRY:
+            # 더 안 시킨다. 사실을 남기고 넘긴다 — 게이트가 판단할 몫이다.
+            _log_check(cycle_id, sdef, role, ok, total, bad, final=True)
+            return saved
+        _log_check(cycle_id, sdef, role, ok, total, bad)
+        fix_note = checks.report(findings)
+
+    return saved
+
+
+def _role_out_dir(sdef: Any, role: str, out_dir: Path) -> Path:
+    return out_dir / role if len(sdef.roles) > 1 else out_dir
+
+
+def _screen_count(cycle_id: int) -> int:
+    """SCREENS.md 의 화면 수 — 프론트엔드 검사의 목표치."""
+    for rel in resolve_inputs(cycle_id, ("SCREENS.md",)):
+        import re as _re
+        txt = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        return len(_re.findall(r"^##\s+\S", txt, _re.M))
+    return 0
+
+
+def _log_check(cycle_id: int, sdef: Any, role: str, ok: int, total: int,
+               bad: list[checks.Finding], final: bool = False) -> None:
+    """검사 결과를 픽셀 오피스 로그와 감사 로그에 남긴다.
+
+    조용히 재실행하면 학생이 "왜 두 번 도나" 를 알 수 없다. 보이게 한다.
+    """
+    db = SessionLocal()
+    try:
+        if not bad:
+            msg = f"{sdef.id} 완료 조건 {ok}/{total} 통과"
+        elif final:
+            msg = (f"{sdef.id} 완료 조건 {ok}/{total} — 미달 {len(bad)}건 남긴 채 진행 "
+                   f"({bad[0].label})")
+        else:
+            msg = f"{sdef.id} 완료 조건 {ok}/{total} — 미달 {len(bad)}건, 다시 시킨다"
+        services.mirror(db, cycle_id, "hq", role, "response", msg)
+        audit(db, "hq", "step.check", f"cycle:{cycle_id}:{sdef.id}",
+              {"role": role, "ok": ok, "total": total,
+               "failed": [f.label for f in bad][:8], "final": final})
+        db.commit()
+    finally:
+        db.close()
+
+
+async def _send_and_wait(cycle_id: int, sdef: Any, role: str, url: str,
+                         out_dir: Path, fix_note: str, attempt: int, a2a) -> list[str]:
+    """한 번 보내고 끝날 때까지 폴링한다."""
     hq = os.getenv("HQ_SELF_URL", "http://127.0.0.1:8000")
+    instruction = _instruction(sdef, role)
+    if fix_note:
+        instruction = f"{instruction}\n\n{fix_note}"
+
     req = a2a.TaskRequest(
         role=role, cycle_id=cycle_id, step_id=sdef.id, step_name=sdef.name,
         task=_task_name(sdef),
@@ -597,13 +677,16 @@ async def _one_role(cycle_id: int, sdef: Any, role: str, url: str,
                  or (("VERDICT.md",) if sdef.type in ("gate",) else ())),
         timeout_sec=sdef.timeout_sec,
         order=_order_text(cycle_id) if "order" in sdef.inputs else "",
-        instruction=_instruction(sdef, role),
+        instruction=instruction,
+        # 재실행은 작업 디렉터리를 분리한다 — 앞 시도의 파일을 그대로 집어오지 않게
+        work_key=f"{sdef.id}-{role}-r{attempt}" if attempt else "",
     )
 
     db = SessionLocal()
     try:
         services.mirror(db, cycle_id, "hq", role, "request",
-                        f"{sdef.id} {sdef.name} 지시")
+                        f"{sdef.id} {sdef.name} 지시" if not attempt
+                        else f"{sdef.id} 재작업 지시 (완료 조건 미달)")
     finally:
         db.close()
 

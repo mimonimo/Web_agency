@@ -242,3 +242,69 @@ dialog button.primary:hover{background:#7cb4fb}
   transition:background .12s;
 }
 .site-top:hover{background:#1d5230}
+
+/* ── 공통 내비게이션 (assets/ui.js 가 그린다) ───────────────── */
+.navbar{gap:.8rem}
+.navlinks{display:flex;gap:.3rem;flex-wrap:wrap}
+.navlink{
+  display:inline-block;padding:.42rem .8rem;border-radius:9px;
+  color:var(--dim);text-decoration:none;font-weight:650;font-size:.97rem;
+  border:1.5px solid transparent;white-space:nowrap;
+}
+.navlink:hover{background:var(--panel2);color:var(--fg)}
+.navlink.on{background:#1b2740;color:var(--fg);border-color:#33507f}
+.navextra{margin-left:auto;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.muted{color:var(--dim);font-size:.95rem}
+
+/* ── 알림 ──────────────────────────────────────────────────── */
+#toastbox{position:fixed;right:1rem;bottom:1rem;z-index:99;
+  display:flex;flex-direction:column;gap:.5rem;max-width:min(30rem,90vw)}
+.toast{
+  background:var(--panel2);border:1.5px solid var(--line);border-left-width:5px;
+  border-radius:10px;padding:.7rem 1rem;font-size:.98rem;line-height:1.5;
+  box-shadow:0 8px 24px #0008;transition:opacity .35s;
+}
+.toast.ok{border-left-color:var(--ok)}
+.toast.bad{border-left-color:var(--bad)}
+.toast.info{border-left-color:var(--run)}
+
+/* ── 공통 조각 ─────────────────────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem}
+.card h3{margin:0 0 .8rem;font-size:1.02rem;color:var(--dim);font-weight:750;
+  display:flex;align-items:center;gap:.55rem}
+.card h3 .act{margin-left:auto;display:flex;gap:.4rem;align-items:center}
+.btn{
+  background:var(--panel2);color:var(--fg);border:1.5px solid var(--line);
+  border-radius:9px;padding:.5rem 1rem;cursor:pointer;font-family:inherit;
+  font-size:.96rem;font-weight:650;line-height:1.25;
+}
+.btn:hover:not(:disabled){background:#2c384c;border-color:#48587a}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{background:var(--run);color:#0d1017;border-color:var(--run);font-weight:800}
+.btn.primary:hover:not(:disabled){background:#7cb4fb}
+.btn.good{background:#1d3a29;border-color:#2f6a49;color:#bbf7d0}
+.btn.good:hover:not(:disabled){background:#265037}
+.btn.danger{border-color:#6b3030;color:#ffc9c9}
+.btn.danger:hover:not(:disabled){background:#43222a}
+.btn.sm{padding:.3rem .65rem;font-size:.88rem;border-radius:7px}
+.pathbox{
+  font-family:ui-monospace,"D2Coding",monospace;font-size:.92rem;
+  background:#0f131b;border:1px solid var(--line);border-radius:7px;
+  padding:.35rem .6rem;color:#a5d8ff;word-break:break-all;
+}
+.chip{display:inline-block;padding:.16rem .6rem;border-radius:999px;
+  background:var(--panel2);border:1px solid var(--line);font-size:.85rem;color:var(--dim)}
+.chip.on{background:#1b2740;color:#cfe3ff;border-color:#33507f}
+.ok-mark{color:var(--ok)} .bad-mark{color:var(--bad)}
+textarea.box,input.box,select.box{
+  width:100%;background:#0f131b;color:var(--fg);border:1.5px solid var(--line);
+  border-radius:9px;padding:.6rem .75rem;font-family:inherit;font-size:1rem;
+}
+textarea.box{font-family:ui-monospace,"D2Coding",monospace;line-height:1.65;resize:vertical}
+textarea.box:focus,input.box:focus,select.box:focus{
+  outline:none;border-color:var(--run);box-shadow:0 0 0 3px rgba(96,165,250,.18)}
+.tabs{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.8rem}
+.tabs button{background:none;border:1.5px solid var(--line);color:var(--dim);
+  border-radius:9px;padding:.42rem .9rem;cursor:pointer;font:inherit;font-weight:650}
+.tabs button.on{background:#1b2740;color:var(--fg);border-color:#33507f}
+.empty{color:var(--dim);padding:1.2rem;text-align:center;font-size:.98rem}

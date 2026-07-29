@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>작업물 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{flex:1;display:grid;grid-template-columns:minmax(17rem,22rem) 1fr;
+        gap:1rem;padding:1rem;min-height:0}
+  @media (max-width:960px){ .wrap{grid-template-columns:1fr} }
+
+  .plist{display:flex;flex-direction:column;gap:.5rem;overflow-y:auto}
+  .pitem{
+    text-align:left;background:var(--panel);border:1.5px solid var(--line);
+    border-radius:10px;padding:.75rem .9rem;cursor:pointer;color:var(--fg);
+    font:inherit;line-height:1.45;
+  }
+  .pitem:hover{border-color:#48587a;background:var(--panel2)}
+  .pitem.on{border-color:#33507f;background:#1b2740}
+  .pitem b{font-size:1.04rem}
+  .pitem .meta{color:var(--dim);font-size:.9rem;margin-top:.2rem}
+
+  .detail{display:flex;flex-direction:column;gap:1rem;min-height:0;overflow-y:auto}
+  .pages{display:flex;gap:.4rem;flex-wrap:wrap}
+  .pages button{
+    background:var(--panel2);border:1.5px solid var(--line);color:var(--fg);
+    border-radius:9px;padding:.45rem .85rem;cursor:pointer;font:inherit;font-size:.95rem}
+  .pages button.on{background:#1b2740;border-color:#33507f}
+  .pages button .k{color:var(--dim);font-size:.82rem;margin-left:.35em}
+  .frame{width:100%;min-height:32rem;border:0;border-radius:8px;background:#fff}
+  .siteblk{border-top:1px solid var(--line);padding-top:.8rem;margin-top:.3rem}
+  .siteblk:first-of-type{border-top:0;margin-top:0;padding-top:0}
+  .ordbox{white-space:pre-wrap;font-size:.94rem;color:var(--dim);
+    background:#0f131b;border:1px solid var(--line);border-radius:8px;padding:.7rem .85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="plist" id="plist"></aside>
+  <section class="detail" id="detail">
+    <div class="card"><div class="empty">왼쪽에서 작업을 고르세요.</div></div>
+  </section>
+</div>
+
+<script src="/assets/ui.js"></script>
+<script>
+let groups = [], sel = null;
+
+nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/review.html">👀 보고 고치기</a>');
+cycleBadge($("cyc"));
+
+async function load() {
+  groups = await api("/api/review/projects");
+  $("plist").innerHTML = groups.length ? groups.map((g, i) =>
+    `<button class="pitem" data-i="${i}">
+       <b>${esc(g.title || g.key)}</b>
+       <div class="meta">
+         ${g.status ? `<span class="badge ${g.status}" style="font-size:.8rem;padding:.1rem .55rem">${g.status}</span> ` : ""}
+         결과물 ${g.site_count}벌 · 페이지 ${g.page_count}개
+       </div>
+     </button>`).join("")
+    : `<div class="card"><div class="empty">아직 만들어진 작업물이 없습니다.<br>
+        주문을 넣고 사이클을 돌리면 여기에 쌓입니다.</div></div>`;
+  $("plist").querySelectorAll(".pitem").forEach(b =>
+    b.onclick = () => pick(+b.dataset.i));
+  if (groups.length) pick(sel ?? 0);
+}
+
+function pick(i) {
+  sel = i;
+  const g = groups[i];
+  $("plist").querySelectorAll(".pitem").forEach((b, k) =>
+    b.classList.toggle("on", k === i));
+
+  const head = `
+    <div class="card">
+      <h3>${esc(g.title || g.key)}
+        <span class="act">
+          ${g.cycle_id ? `<a class="btn sm" href="/board.html?cycle=${g.cycle_id}">🎫 티켓</a>` : ""}
+          <a class="btn sm" href="/review.html">✍️ 고치기</a>
+        </span></h3>
+      ${g.order ? `<div class="ordbox">${esc(g.order.body)}</div>` : ""}
+    </div>`;
+
+  const blocks = g.sites.map((s, si) => `
+    <div class="card siteblk" data-site="${si}">
+      <h3>${esc(s.kind)} · <span class="pathbox" style="display:inline-block">${esc(s.dir)}</span>
+        <span class="act">
+          <span class="muted">${s.files}개 파일</span>
+          <a class="btn sm" target="_blank" rel="noopener" href="${esc(s.url)}">↗ 새 창</a>
+          <a class="btn sm" href="/files.html?path=${encodeURIComponent(s.dir)}">🗂 파일</a>
+        </span></h3>
+      <div class="pages">${s.pages.map((p, pi) =>
+        `<button data-si="${si}" data-pi="${pi}" class="${p.main ? "on" : ""}">
+           ${p.main ? "🏠 " : "📄 "}${esc(p.title)}<span class="k">${esc(p.name)}</span>
+         </button>`).join("") || `<span class="muted">페이지 없음</span>`}</div>
+      <iframe class="frame" id="f${si}" title="${esc(s.dir)} 미리보기"
+              src="${esc(s.pages.find(p => p.main)?.url || s.url)}"></iframe>
+    </div>`).join("") || `<div class="card"><div class="empty">이 작업에는 볼 수 있는 페이지가 없습니다.</div></div>`;
+
+  $("detail").innerHTML = head + blocks;
+  $("detail").querySelectorAll(".pages button").forEach(b => b.onclick = () => {
+    const s = g.sites[+b.dataset.si], p = s.pages[+b.dataset.pi];
+    $("f" + b.dataset.si).src = p.url + "?t=" + Date.now();
+    b.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+  });
+}
+
+load();
+setInterval(() => { const k = sel; load().then(() => { if (k != null) sel = k; }); }, 30000);
+</script>
+</body>
+</html>

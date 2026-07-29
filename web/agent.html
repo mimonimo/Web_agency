@@ -3,239 +3,240 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>에이전트 상세 — AGORA Web</title>
+<title>에이전트 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .wrap{max-width:1240px;margin:1.2rem auto;padding:0 1.2rem}
-  .pick{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
-  .pick a{border:1.5px solid var(--line);border-radius:10px;padding:.5rem .85rem;
-          font-size:1rem;font-weight:600;text-decoration:none;color:var(--fg);
-          background:#121824;display:inline-flex;align-items:center;gap:.4rem}
-  .pick a:hover{background:#222c3c}
-  .pick a.on{border-color:var(--run);background:#1b2740;box-shadow:0 0 0 3px rgba(96,165,250,.18)}
-  .pick a .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
-  .pick a.up .dot{background:var(--ok)}
+  .wrap{flex:1;display:grid;grid-template-columns:minmax(14rem,17rem) 1fr;
+        gap:1rem;padding:1rem;min-height:0}
+  @media (max-width:1000px){ .wrap{grid-template-columns:1fr} }
 
-  .cols{display:grid;grid-template-columns:1.15fr 1fr;gap:1rem}
-  @media (max-width:1000px){ .cols{grid-template-columns:1fr} }
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem;margin-bottom:1rem}
-  .card h3{margin:0 0 .8rem;font-size:1rem;color:var(--dim);display:flex;
-           align-items:center;gap:.6rem;font-weight:700}
-  .card h3 .act{margin-left:auto;display:flex;gap:.4rem}
+  .roles{display:flex;flex-direction:column;gap:.35rem;overflow-y:auto}
+  .roles button{
+    display:flex;align-items:center;gap:.55rem;text-align:left;
+    background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
+    padding:.55rem .75rem;cursor:pointer;color:var(--fg);font:inherit;font-size:.99rem}
+  .roles button:hover{background:var(--panel2);border-color:#48587a}
+  .roles button.on{background:#1b2740;border-color:#33507f}
+  .roles .dot{width:.65rem;height:.65rem;border-radius:50%;background:var(--idle);flex:none}
+  .roles .dot.up{background:var(--ok)}
+  .roles .n{margin-left:auto;background:var(--wait);color:#0d1017;font-weight:800;
+    border-radius:999px;padding:0 .5rem;font-size:.8rem}
 
-  .who{display:flex;align-items:center;gap:.9rem;margin-bottom:.9rem}
-  .who .ava{font-size:2.6rem}
-  .who .nm{font-size:1.45rem;font-weight:800}
-  .who .en{font-family:ui-monospace,monospace;color:var(--dim);font-size:.95rem}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1rem;font-size:.95rem}
-  .kv dt{color:var(--dim)} .kv dd{margin:0}
-  .kv code{font-family:ui-monospace,monospace;font-size:.9rem;color:#a5d8ff}
-
-  .stp{display:grid;grid-template-columns:56px 1fr auto;gap:.7rem;align-items:center;
-       border:1px solid var(--line);border-left-width:4px;border-radius:8px;
-       padding:.55rem .8rem;margin-bottom:.5rem;background:#121824}
-  .stp .k{font-family:ui-monospace,monospace;font-weight:800}
-  .stp .st{font-size:.85rem;font-weight:700;padding:.15rem .6rem;border-radius:999px;
-           background:var(--panel2);color:var(--dim);white-space:nowrap}
-  .stp.DONE{border-left-color:var(--ok)}    .stp.DONE .st{background:#153d22;color:#86efac}
-  .stp.RUNNING{border-left-color:var(--run)}.stp.RUNNING .st{background:#1b2740;color:#93c5fd}
-  .stp.FAILED{border-left-color:var(--bad)} .stp.FAILED .st{background:#341a1a;color:#fecaca}
-  .stp.WAITING_HUMAN{border-left-color:var(--wait)}
-  .stp .sub{font-size:.85rem;color:var(--dim)}
-  .stp .err{grid-column:1/-1;font-size:.88rem;color:#fca5a5}
-
-  .files a{display:flex;gap:.6rem;align-items:center;padding:.45rem .5rem;
-           border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;font-size:.95rem}
+  .main{display:flex;flex-direction:column;gap:1rem;min-height:0;overflow-y:auto}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media (max-width:1200px){ .grid2{grid-template-columns:1fr} }
+  ul.tight{margin:.2rem 0 .8rem;padding-left:1.15rem;line-height:1.6}
+  ul.tight li{margin:.12rem 0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:.4rem .8rem;font-size:.95rem;align-items:center}
+  .kv b{color:var(--dim);font-weight:650}
+  .files a{display:flex;gap:.5rem;align-items:center;padding:.4rem .3rem;
+    border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;font-size:.95rem}
   .files a:hover{background:#1c2432}
-  .files .stepk{font-family:ui-monospace,monospace;font-size:.82rem;color:var(--dim);
-                background:var(--panel2);border-radius:5px;padding:.05rem .4rem}
-  .files .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-  .msgs{max-height:300px;overflow-y:auto;font-size:.92rem}
-  .msgs li{list-style:none;padding:.35rem .3rem;border-bottom:1px solid #232b3a;
-           display:flex;gap:.5rem;align-items:baseline}
-  .msgs .w{font-family:ui-monospace,monospace;color:var(--dim);font-size:.85rem;white-space:nowrap}
-  .msgs li.reject{background:#331a1a}
-
-  .btn{background:var(--panel2);color:var(--fg);border:1.5px solid var(--line);
-       border-radius:9px;padding:.45rem .9rem;cursor:pointer;font-family:inherit;
-       font-size:.92rem;font-weight:600;text-decoration:none;display:inline-block}
-  .btn:hover{background:#2c384c}
-  .btn.primary{background:var(--run);color:#0d1017;border-color:var(--run);font-weight:800}
-  .btn.primary:hover{background:#7cb4fb}
-  .btn.warn{border-color:#6b3030;color:#ffc9c9}
-  .btn.warn:hover{background:#43222a}
-  .btn:disabled{opacity:.35;cursor:not-allowed}
-
-  #viewer{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;
-          align-items:center;justify-content:center;padding:1.5rem;z-index:10}
-  #viewer.on{display:flex}
-  #viewer .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-               width:min(1000px,100%);max-height:90vh;display:flex;flex-direction:column}
-  #viewer .top{display:flex;align-items:center;gap:.7rem;padding:.9rem 1rem;
-               border-bottom:1px solid var(--line);flex-wrap:wrap}
-  #viewer .top code{font-family:ui-monospace,monospace;font-size:.92rem;color:#a5d8ff;flex:1;
-                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #viewer textarea{flex:1;min-height:52vh;border:0;border-radius:0 0 12px 12px;
-                   background:#0f131b;color:var(--fg);padding:1rem;resize:none;
-                   font-family:ui-monospace,"D2Coding",monospace;font-size:1rem;line-height:1.7}
-  #viewer textarea:focus{outline:none}
-  .vmsg{font-size:.9rem;font-weight:600}
+  .files .nm{flex:1;font-family:ui-monospace,monospace;font-size:.9rem;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .noteline{display:flex;gap:.5rem;align-items:flex-start;padding:.4rem 0;
+    border-bottom:1px solid #232b3a;font-size:.95rem}
+  .noteline span.t{flex:1}
+  .findings div{padding:.3rem 0;border-bottom:1px solid #232b3a;font-size:.94rem}
+  .findings .fix{color:var(--dim);font-size:.9rem;padding-left:1.3rem;border:0}
+  .steps table{width:100%;border-collapse:collapse;font-size:.95rem}
+  .steps td{padding:.4rem .3rem;border-bottom:1px solid #232b3a}
+  .msg{max-height:14rem;overflow-y:auto;font-size:.92rem}
+  .msg div{padding:.3rem 0;border-bottom:1px solid #232b3a}
 </style>
 </head>
 <body>
-<header class="bar">
-  <div class="brand">AGORA<span>Web</span></div>
-  <div class="cycleinfo">
-    <span id="c-title">-</span><span id="c-status" class="badge">-</span>
-    <a class="link" href="/index.html" style="margin-left:.9rem">픽셀 오피스 →</a>
-    <a class="link" href="/files.html" style="margin-left:.7rem">파일 탐색기 →</a>
-  </div>
-</header>
-
 <div class="wrap">
-  <div class="pick" id="pick"></div>
-  <div class="cols">
-    <div>
-      <div class="card">
-        <div class="who">
-          <span class="ava" id="ava">🧑</span>
-          <span><span class="nm" id="nm">-</span> <span class="en" id="en"></span></span>
-        </div>
-        <dl class="kv" id="kv"></dl>
-      </div>
-      <div class="card">
-        <h3>이 역할이 맡은 단계
-          <span class="act">
-            <button class="btn warn" id="retry" title="이 단계만 다시 시킨다">↻ 재요청</button>
-          </span>
-        </h3>
-        <div id="steps"></div>
-      </div>
-    </div>
-    <div>
-      <div class="card">
-        <h3>만든 파일 <span class="act"><a class="btn" id="browse" href="/files.html">탐색기에서 보기</a></span></h3>
-        <div class="files" id="files"></div>
-      </div>
-      <div class="card">
-        <h3>주고받은 메시지</h3>
-        <ul class="msgs" id="msgs"></ul>
-      </div>
-    </div>
-  </div>
+  <aside class="roles" id="roles"></aside>
+  <section class="main" id="main"><div class="card"><div class="empty">불러오는 중…</div></div></section>
 </div>
 
-<div id="viewer">
-  <div class="box">
-    <div class="top">
-      <code id="v-path"></code>
-      <span class="vmsg" id="v-msg"></span>
-      <button class="btn primary" id="v-save">저장</button>
-      <button class="btn" id="v-close">닫기</button>
-    </div>
-    <textarea id="v-body" spellcheck="false"></textarea>
-  </div>
-</div>
-
+<script src="/assets/ui.js"></script>
 <script>
-const AVATAR={pm:"🧑‍💼",planner:"🧑‍🏫",sales:"🧑‍💻",sysadmin:"🧑‍🔧",designer:"🧑‍🎨",
-  frontend:"🧑‍🚀",backend:"🧑‍🍳",dba:"🧑‍🌾",security:"🧑‍✈️",qa:"🧑‍🔬",customer:"🧑"};
-const ROLES=[["pm","관리"],["planner","기획"],["sales","영업"],["sysadmin","인프라"],
-  ["designer","디자인"],["frontend","프론트"],["backend","백엔드"],["dba","DB"],
-  ["security","보안"],["qa","QA"],["customer","고객"]];
-const ST={DONE:"완료",RUNNING:"진행 중",PENDING:"대기",WAITING_HUMAN:"사람 대기",
-          FAILED:"실패",REJECTED:"반려",SKIPPED:"건너뜀"};
-const $=(i)=>document.getElementById(i);
-const esc=(s)=>String(s??"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));
-let role=new URLSearchParams(location.search).get("role")||"backend";
-let D=null, openPath=null;
+let list = [], role = new URLSearchParams(location.search).get("role") || "designer";
+let D = null, C = null;
 
-async function draw(){
-  let r; try{ r=await (await fetch(`/api/agents/${role}`)).json(); }catch(e){ return; }
-  D=r.data;
+nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/review.html">👀 보고 고치기</a>');
 
-  $("pick").innerHTML=ROLES.map(([x,ko])=>
-    `<a href="?role=${x}" class="${x===role?"on":""} ${D&&x===role&&D.node.status==="up"?"up":""}">
-       <span class="dot"></span>${ko}<span class="en" style="font-size:.82rem;color:var(--dim)">${x}</span></a>`).join("");
-
-  const c=D.cycle;
-  $("c-title").textContent=c?`사이클 #${c.id} · ${c.pipeline}`:"사이클 없음";
-  $("c-status").textContent=c?c.status:"-"; $("c-status").className="badge "+(c?c.status:"");
-
-  $("ava").textContent=AVATAR[role]||"🧑";
-  $("nm").textContent=D.display_name; $("en").textContent=role;
-
-  const n=D.node, sp=D.spec;
-  $("kv").innerHTML=[
-    ["노드", `${n.status==="up"?"🟢 살아 있음":"⚫ 응답 없음"} · ${esc(n.dgx_host||"-")}`],
-    ["A2A 주소", `<code>${esc(n.a2a_url||"-")}</code>`],
-    ["AGENT.md", sp
-      ? `${sp.status==="customized"?"✅ 학생이 수정함":"⏳ 초안"} ·
-         <code>${esc(sp.path)}</code>
-         <a class="btn" style="padding:.2rem .6rem;margin-left:.4rem" href="/edit.html?role=${role}">편집</a>`
-      : "아직 없음 (S2 에서 생성)"],
-    ["지금 하는 일", D.current
-      ? `<b>${D.current.key} ${esc(D.current.name)}</b>` : "대기 중"],
-  ].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
-
-  $("steps").innerHTML=(D.steps||[]).map(s=>`
-    <div class="stp ${s.status}">
-      <span class="k">${s.key}</span>
-      <span>${esc(s.name)}
-        <div class="sub">${s.task?esc(s.task):""}${s.with&&s.with.length?` · 함께: ${s.with.join(", ")}`:""}${s.attempt>1?` · ${s.attempt}회차`:""}</div></span>
-      <span class="st">${ST[s.status]||s.status}</span>
-      ${s.error?`<span class="err">${esc(s.error)}</span>`:""}
-    </div>`).join("")||`<div style="color:var(--dim)">이 사이클에서 맡은 단계가 없습니다.</div>`;
-
-  const files=[...(D.artifacts||[]),
-               ...(D.reports||[]).map(x=>({path:x.path,name:x.name,step:x.step}))];
-  $("files").innerHTML=files.length?files.map(f=>
-    `<a href="#" onclick="openFile('${encodeURI(f.path)}');return false">
-       <span class="stepk">${f.step||"-"}</span>
-       <span class="nm">${esc(f.name)}</span>
-       <span style="color:var(--dim);font-size:.85rem">보기·수정</span></a>`).join("")
-    : `<div style="color:var(--dim);padding:.4rem">아직 만든 파일이 없습니다.</div>`;
-  $("browse").href = D.cycle ? `/files.html?path=runs/${D.cycle.id}` : "/files.html";
-
-  $("msgs").innerHTML=(D.messages||[]).slice().reverse().map(m=>
-    `<li class="${m.kind}"><span class="w">${esc(m.from)}→${esc(m.to)}</span>
-      <span>${esc(m.summary||"")}</span></li>`).join("")
-    ||`<li style="color:var(--dim)">메시지가 없습니다.</li>`;
-
-  $("retry").disabled = !D.cycle || D.cycle.status==="RUNNING";
-  $("retry").title = D.cycle && D.cycle.status==="RUNNING"
-    ? "사이클이 돌고 있습니다. 픽셀 오피스에서 일시정지한 뒤 눌러주세요."
-    : "이 역할의 마지막 단계를 다시 시킨다";
+async function loadRoles() {
+  list = await api("/api/agents");
+  $("roles").innerHTML = list.map(r =>
+    `<button data-r="${r.role}" class="${r.role === role ? "on" : ""}">
+       <span class="dot" id="dot-${r.role}"></span>
+       <span>${esc(r.display_name)}<br>
+         <span class="muted" style="font-size:.82rem">${esc(r.role)}</span></span>
+       ${r.notes ? `<span class="n" title="사람이 넣은 지시 ${r.notes}건">${r.notes}</span>` : ""}
+     </button>`).join("");
+  $("roles").querySelectorAll("button").forEach(b => b.onclick = () => {
+    role = b.dataset.r;
+    history.replaceState(null, "", `?role=${role}`);
+    loadRoles(); load();
+  });
 }
 
-async function openFile(path){
-  openPath=decodeURI(path);
-  $("v-path").textContent=openPath; $("v-msg").textContent="";
-  $("v-body").value="불러오는 중...";
-  $("viewer").classList.add("on");
-  const r=await fetch(`/api/files?path=${encodeURIComponent(openPath)}`);
-  $("v-body").value = r.ok ? await r.text() : "(읽을 수 없습니다)";
+async function load() {
+  [D, C] = await Promise.all([
+    api(`/api/agents/${role}`),
+    api(`/api/agents/${role}/catalog`).catch(() => ({})),
+  ]);
+  cycleBadge($("cyc"));
+  render();
+  const dot = $("dot-" + role); if (dot) dot.classList.toggle("up", D.node.status === "up");
 }
-$("v-close").onclick=()=>$("viewer").classList.remove("on");
-$("viewer").onclick=(e)=>{ if(e.target.id==="viewer") $("viewer").classList.remove("on"); };
-$("v-save").onclick=async()=>{
-  const r=await fetch(`/api/files?path=${encodeURIComponent(openPath)}`,
-    {method:"PUT",headers:{"Content-Type":"text/plain"},body:$("v-body").value});
-  $("v-msg").textContent = r.ok ? "저장했습니다" : "저장 실패";
-  $("v-msg").style.color = r.ok ? "var(--ok)" : "var(--bad)";
-};
 
-$("retry").onclick=async()=>{
-  if(!confirm(`${D.display_name} 에게 마지막 단계를 다시 시킵니다.\n그 단계의 기존 산출물은 지워집니다. 계속할까요?`)) return;
-  const r=await fetch(`/api/agents/${role}/retry`,{method:"POST"});
-  const j=await r.json().catch(()=>({}));
-  alert(r.ok ? (j.data?.note||"재요청했습니다") : (j.detail||"재요청 실패"));
-  draw();
-};
+const li = (xs) => (xs || []).map(x => `<li>${esc(x)}</li>`).join("");
 
-draw();
-setInterval(draw,3000);
+function render() {
+  const cur = D.current, notes = D.notes || { items: [], global_items: [] };
+  $("main").innerHTML = `
+  <div class="card">
+    <h3>${esc(D.display_name)} <span class="muted">${esc(D.role)}</span>
+      <span class="act">
+        <span class="chip ${D.node.status === "up" ? "on" : ""}">${D.node.status === "up" ? "● 노드 살아 있음" : "○ 노드 응답 없음"}</span>
+        <span class="muted">${esc(D.node.dgx_host || "")}</span>
+      </span></h3>
+    <p style="margin:.1rem 0 .8rem">${esc(C.mission || "")}</p>
+    <div class="kv">
+      <b>지금</b><span>${cur ? `<span class="badge RUNNING">${esc(cur.key)}</span> ${esc(cur.name)}`
+                            : `<span class="muted">쉬는 중</span>`}</span>
+      <b>담당 단계</b><span>${esc((C.steps || []).join(", ") || "-")}</span>
+      <b>기준선</b><span class="pathbox">${esc(D.paths.baseline)}</span>
+      <b>이번 지시문</b><span><span class="pathbox" style="display:inline-block">${esc(D.paths.spec)}</span>
+        <a class="btn sm" href="/edit.html?role=${role}" style="margin-left:.4rem">📝 편집</a></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>✍️ 이 역할에게 지시 추가
+      <span class="act"><button class="btn sm danger" id="clr">전부 지우기</button></span></h3>
+    <p class="muted" style="margin:.1rem 0 .6rem">
+      저장하면 <b>${esc(D.display_name)}</b> 가 <b>다음에 일할 때</b> 프롬프트 맨 뒤에 붙습니다
+      (앞의 어떤 지침보다 우선). 지금 돌고 있는 단계에 넣으려면 아래 <b>↻재요청</b> 도 누르세요.<br>
+      파일: <span class="pathbox" style="display:inline-block">${esc(notes.path)}</span>
+    </p>
+    <div style="display:flex;gap:.5rem">
+      <input class="box" id="note" style="flex:1" autocomplete="off"
+             placeholder="예) 버튼 모서리를 더 둥글게. 반경 12px 정도로.">
+      <button class="btn primary" id="addnote">추가</button>
+    </div>
+    <div id="notes" style="margin-top:.6rem">
+      ${(notes.items.length || notes.global_items.length) ? "" : `<div class="muted">아직 없습니다.</div>`}
+      ${notes.global_items.map(t => `<div class="noteline"><span class="chip">전원</span><span class="t">${esc(t)}</span></div>`).join("")}
+      ${notes.items.map(t => `<div class="noteline"><span class="chip on">${esc(D.display_name)}</span><span class="t">${esc(t)}</span></div>`).join("")}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>🎯 목표와 완료 조건</h3>
+      <b class="muted">이번에 달성할 것</b>
+      <ul class="tight">${li(C.goals)}</ul>
+      <b class="muted">완료 조건 — 게이트가 본다</b>
+      <ul class="tight">${li(C.dod)}</ul>
+      <b class="muted">특히 조심할 것</b>
+      <ul class="tight">${li(C.forbid)}</ul>
+    </div>
+
+    <div class="card">
+      <h3>✅ 산출물 검사
+        <span class="act"><button class="btn sm primary" id="chk">지금 검사</button></span></h3>
+      <p class="muted" style="margin:.1rem 0 .5rem">
+        HQ 가 단계 직후에 자동으로 돌리는 것과 같은 기계 검사입니다.
+        산출물을 손으로 고친 뒤 다시 눌러 확인하세요.</p>
+      <div class="findings" id="findings"><div class="muted">「지금 검사」를 누르세요.</div></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card steps">
+      <h3>📋 맡은 단계
+        <span class="act">
+          <button class="btn sm" id="pause">⏸ 일시정지</button>
+          <button class="btn sm primary" id="retry">↻ 재요청</button>
+        </span></h3>
+      <table><tbody>${(D.steps || []).map(s => `
+        <tr>
+          <td><b>${esc(s.key)}</b></td>
+          <td>${esc(s.name)}</td>
+          <td><span class="badge ${s.status}" style="font-size:.78rem;padding:.1rem .55rem">${s.status}</span></td>
+          <td style="text-align:right"><button class="btn sm" data-step="${esc(s.key)}" title="이 단계만 다시">↻</button></td>
+        </tr>`).join("") || `<tr><td class="muted">없습니다</td></tr>`}</tbody></table>
+      <p class="muted" style="margin-top:.5rem">
+        재요청은 <b>그 단계 하나만</b> 다시 돌립니다 (되감기와 다름).
+        사이클이 돌고 있으면 먼저 일시정지하세요.</p>
+    </div>
+
+    <div class="card">
+      <h3>📄 만든 파일 <span class="act muted">${(D.artifacts || []).length}개</span></h3>
+      <div class="files">${(D.artifacts || []).slice(0, 40).map(a =>
+        `<a href="/files.html?path=${encodeURIComponent(a.path.split("/").slice(0, -1).join("/"))}"
+            title="${esc(a.path)}"><span>📄</span>
+           <span class="nm">${esc(a.path)}</span>
+           <span class="muted">${esc(a.step || "")}</span></a>`).join("")
+        || `<div class="muted">아직 없습니다</div>`}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>💬 주고받은 말</h3>
+    <div class="msg">${(D.messages || []).slice().reverse().map(m =>
+      `<div><span class="muted">${esc(m.from)}→${esc(m.to)}</span> ${esc(m.summary || "")}</div>`).join("")
+      || `<div class="muted">아직 없습니다</div>`}</div>
+  </div>`;
+  wire();
+}
+
+function wire() {
+  const add = async () => {
+    const t = $("note").value.trim();
+    if (!t) { toast("지시를 한 줄 적어 주세요", "bad"); return; }
+    await act($("addnote"), () => api(`/api/agents/${role}/notes`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: t }),
+    }), "지시를 넣었습니다. 다음 실행부터 반영됩니다.");
+    $("note").value = ""; load(); loadRoles();
+  };
+  $("addnote").onclick = add;
+  $("note").onkeydown = (e) => { if (e.key === "Enter") add(); };
+
+  $("clr").onclick = () => act($("clr"),
+    () => api(`/api/agents/${role}/notes`, { method: "DELETE" }), "지시를 비웠습니다")
+    .then(() => { load(); loadRoles(); }).catch(() => {});
+
+  $("chk").onclick = () => act($("chk"), async () => {
+    const r = await api(`/api/agents/${role}/check`);
+    const box = $("findings");
+    if (!r.results.length) {
+      box.innerHTML = `<div class="muted">검사할 산출물이 아직 없습니다.</div>`;
+      return { note: "산출물이 아직 없습니다" };
+    }
+    box.innerHTML = r.results.map(res => `
+      <div><b>${esc(res.dir)}</b> —
+        <b class="${res.ok === res.total ? "ok-mark" : "bad-mark"}">${res.ok}/${res.total}</b></div>
+      ${res.findings.map(f => `
+        <div>${f.ok ? "✅" : "❌"} ${esc(f.label)}${(!f.ok && f.detail) ? " — " + esc(f.detail) : ""}</div>
+        ${(!f.ok && f.fix) ? `<div class="fix">→ ${esc(f.fix)}</div>` : ""}`).join("")}`).join("");
+    const tot = r.results.reduce((a, x) => a + x.total, 0);
+    const ok = r.results.reduce((a, x) => a + x.ok, 0);
+    return { note: `완료 조건 ${ok}/${tot} 통과` };
+  }).catch(() => {});
+
+  $("pause").onclick = () => act($("pause"), async () => {
+    const d = await api("/api/dashboard");
+    if (!d.cycle) throw new Error("사이클이 없습니다");
+    return api(`/api/cycles/${d.cycle.id}/pause`, { method: "POST" });
+  }, "일시정지 요청 — 현재 단계를 마치고 멈춥니다").then(load).catch(() => {});
+
+  const retry = (step, btn) => act(btn, () =>
+    api(`/api/agents/${role}/retry${step ? "?step_key=" + encodeURIComponent(step) : ""}`,
+        { method: "POST" })).then(load).catch(() => {});
+  $("retry").onclick = () => retry(null, $("retry"));
+  $("main").querySelectorAll("button[data-step]").forEach(b =>
+    b.onclick = () => retry(b.dataset.step, b));
+}
+
+loadRoles().then(load);
+setInterval(() => { if (!document.querySelector("[data-busy]")) load(); }, 12000);
 </script>
 </body>
 </html>

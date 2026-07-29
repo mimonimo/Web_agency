@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보고 고치기 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{flex:1;display:grid;grid-template-columns:1fr minmax(23rem,30rem);
+        gap:1rem;padding:1rem;min-height:0}
+  @media (max-width:1100px){ .wrap{grid-template-columns:1fr} }
+
+  .stage{display:flex;flex-direction:column;min-height:0}
+  .stage .card{flex:1;display:flex;flex-direction:column;min-height:0;padding:.7rem}
+  .frame{flex:1;min-height:26rem;border:0;border-radius:8px;background:#fff;width:100%}
+  .srcbar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem}
+  .srcbar select{max-width:26rem}
+  .devices{display:flex;gap:.3rem}
+  .frame.mobile{max-width:390px;margin:0 auto;box-shadow:0 0 0 8px #000,0 0 0 10px #333}
+  .frame.tablet{max-width:820px;margin:0 auto}
+
+  .side{display:flex;flex-direction:column;gap:1rem;min-height:0;overflow-y:auto}
+  .who{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
+  .who button{background:var(--panel2);border:1.5px solid var(--line);color:var(--dim);
+    border-radius:999px;padding:.3rem .8rem;cursor:pointer;font:inherit;font-size:.9rem}
+  .who button.on{background:#1b2740;color:#cfe3ff;border-color:#33507f}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.7rem}
+  .modes button{text-align:left;padding:.7rem .8rem;line-height:1.35}
+  .modes small{display:block;color:var(--dim);font-weight:500;font-size:.84rem;margin-top:.2rem}
+  .running{display:flex;gap:.4rem;flex-wrap:wrap}
+  .log{max-height:16rem;overflow-y:auto;font-size:.92rem}
+  .log div{padding:.35rem 0;border-bottom:1px solid #232b3a}
+  .hint{color:var(--dim);font-size:.92rem;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 왼쪽: 지금까지 만들어진 화면 -->
+  <section class="stage">
+    <div class="card">
+      <div class="srcbar">
+        <select class="box" id="src" style="flex:1"></select>
+        <div class="devices">
+          <button class="btn sm" data-w="full">🖥 전체</button>
+          <button class="btn sm" data-w="tablet">📱 태블릿</button>
+          <button class="btn sm" data-w="mobile">📱 모바일</button>
+        </div>
+        <button class="btn sm" id="reload">↻ 새로고침</button>
+        <a class="btn sm" id="open" target="_blank" rel="noopener">↗ 새 창</a>
+      </div>
+      <iframe class="frame" id="frame" title="만들어진 화면 미리보기"></iframe>
+    </div>
+  </section>
+
+  <!-- 오른쪽: 고쳐 달라는 말 -->
+  <aside class="side">
+    <div class="card">
+      <h3>✍️ 고쳐 달라고 말하기</h3>
+      <p class="hint" id="state">불러오는 중…</p>
+      <textarea class="box" id="text" rows="4"
+        placeholder="예) 버튼이 너무 큽니다. 조금 작게 해 주세요.&#10;예) 상단 메뉴에 '문의' 를 추가해 주세요.&#10;예) 색이 너무 차갑습니다. 따뜻한 톤으로 바꿔 주세요."></textarea>
+
+      <div class="who" id="who"></div>
+
+      <div class="modes">
+        <button class="btn primary" id="now">지금 고치기
+          <small>지시를 꽂고 그 단계만 다시 실행 · 2~5분</small></button>
+        <button class="btn" id="next">다음 사이클 주문으로
+          <small>변경 요청 주문을 새로 만든다</small></button>
+      </div>
+      <p class="hint" style="margin-top:.7rem">
+        「지금 고치기」는 사이클이 살아 있을 때만 됩니다.
+        돌고 있으면 자동으로 일시정지한 뒤 그 역할에게 다시 시킵니다.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>🏃 지금 일하는 중
+        <span class="act"><button class="btn sm" id="refresh">↻</button></span></h3>
+      <div class="running" id="running"></div>
+    </div>
+
+    <div class="card">
+      <h3>🗒 최근 오간 말</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="/assets/ui.js"></script>
+<script>
+let cur = null, role = null, timer = null;
+
+nav('<span id="cyc" class="muted"></span>');
+
+function setWidth(kind) {
+  const f = $("frame");
+  f.className = "frame" + (kind === "full" ? "" : " " + kind);
+  document.querySelectorAll(".devices .btn").forEach(b =>
+    b.classList.toggle("primary", b.dataset.w === kind));
+}
+document.querySelectorAll(".devices .btn").forEach(b =>
+  b.onclick = () => setWidth(b.dataset.w));
+
+function show(url) {
+  $("frame").src = url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+  $("open").href = url;
+}
+
+async function load() {
+  cur = await api("/api/review/current");
+  cycleBadge($("cyc"));
+
+  const sel = $("src");
+  const keep = sel.value;
+  sel.innerHTML = (cur.sites || []).map(s =>
+    `<option value="${esc(s.url)}">${esc(s.kind)} · ${esc(s.dir)}${s.role ? " (" + esc(s.role) + ")" : ""} — ${s.files}개 파일</option>`
+  ).join("") || `<option value="">아직 만들어진 화면이 없습니다</option>`;
+  if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+  if (sel.value && $("frame").src.indexOf(sel.value) < 0) show(sel.value);
+
+  // 역할 고르기 — 안 고르면 문장으로 짐작한다
+  if (!$("who").children.length) {
+    $("who").innerHTML =
+      `<button data-r="" class="on">자동 판단</button>` +
+      (cur.roles || []).map(r => `<button data-r="${r.role}">${esc(r.display_name)}</button>`).join("");
+    $("who").querySelectorAll("button").forEach(b => b.onclick = () => {
+      role = b.dataset.r || null;
+      $("who").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    });
+  }
+
+  const w = cur.working || [];
+  $("running").innerHTML = w.length
+    ? w.map(x => `<span class="chip on">${esc(x.step)} ${esc(x.name)} — ${x.roles.join(", ")}</span>`).join("")
+    : `<span class="muted">지금 도는 단계가 없습니다</span>`;
+
+  $("state").innerHTML = cur.cycle
+    ? `사이클 <b>#${cur.cycle.id}</b> · <span class="badge ${cur.cycle.status}">${cur.cycle.status}</span>
+       ${cur.cycle.current_step ? " · " + esc(cur.cycle.current_step) : ""}`
+    : `돌고 있는 사이클이 없습니다. 「다음 사이클 주문으로」만 됩니다.`;
+}
+
+async function loadLog() {
+  try {
+    const ms = await api("/api/messages?limit=25");
+    $("log").innerHTML = (ms || []).slice(-25).reverse().map(m =>
+      `<div><span class="muted">${esc(m.from)}→${esc(m.to)}</span> ${esc(m.summary || "")}</div>`
+    ).join("") || `<div class="muted">아직 없습니다</div>`;
+  } catch { $("log").innerHTML = `<div class="muted">불러올 수 없습니다</div>`; }
+}
+
+$("src").onchange = () => show($("src").value);
+$("reload").onclick = () => show($("src").value);
+$("refresh").onclick = () => { load(); loadLog(); };
+
+async function send(mode) {
+  const text = $("text").value.trim();
+  if (!text) { toast("무엇을 고칠지 한 줄 적어 주세요", "bad"); return; }
+  const btn = mode === "now" ? $("now") : $("next");
+  const r = await act(btn, () => api("/api/review/request", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, role, mode }),
+  }));
+  $("text").value = "";
+  toast(r.note, "info", 9000);
+  load();
+  if (mode === "now") {
+    // 몇 분 뒤 결과가 나온다. 그동안 화면을 계속 새로 고쳐 준다.
+    clearInterval(timer);
+    let n = 0;
+    timer = setInterval(() => {
+      load(); if ($("src").value) show($("src").value);
+      if (++n > 40) clearInterval(timer);      // 최대 10분
+    }, 15000);
+  }
+}
+$("now").onclick = () => send("now");
+$("next").onclick = () => send("next");
+
+setWidth("full");
+load(); loadLog();
+setInterval(loadLog, 8000);
+</script>
+</body>
+</html>

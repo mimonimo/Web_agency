@@ -15,10 +15,12 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from .. import pipelines, runner, services
+from .. import checks, directives, pipelines, runner, services
+from .. import roles as roles_catalog
 from ..db import get_db
 from ..models import (
     AgentSpec,
@@ -49,10 +51,146 @@ def _v(x: Any) -> Any:
 
 @router.get("")
 async def list_agents(db: Session = Depends(get_db)):
-    """11개 역할 요약. 픽셀 오피스가 이미 /api/dashboard 로 받으므로 보조용."""
+    """11개 역할 요약 + 역할 카탈로그 + 사람이 넣은 지시 개수.
+
+    화면이 "이 역할은 무엇을 하는 사람인가" 를 물어보지 않고도 보여줄 수 있어야 한다.
+    """
+    notes = directives.summary()
     return {"ok": True, "data": [
-        {"role": r, "display_name": ROLE_DISPLAY[r]} for r in ROLES
-    ]}
+        {
+            "role": r,
+            "display_name": ROLE_DISPLAY[r],
+            "mission": roles_catalog.mission(r),
+            "node": roles_catalog.get(r).get("node"),
+            "steps": roles_catalog.get(r).get("steps") or [],
+            "owns": roles_catalog.owns(r),
+            "notes": notes.get(r, 0),
+        }
+        for r in ROLES
+    ], "meta": {"global_notes": notes.get("_global", 0)}}
+
+
+@router.get("/{role}/catalog")
+async def role_catalog(role: str):
+    """역할의 목표·완료조건·금지·인계. `roles.yaml` 이 원본이다."""
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    r = roles_catalog.get(role)
+    return {"ok": True, "data": {
+        "role": role, "display_name": ROLE_DISPLAY[role], **r,
+        "baseline_path": f"agents/{role}/AGENT.md",
+        "spec_path": str(services.spec_path(role).relative_to(REPO_ROOT)),
+        "notes_path": str(directives.role_path(role).relative_to(REPO_ROOT)),
+    }}
+
+
+# ── 사람이 중간에 끼워 넣는 지시 ──────────────────────────────────────
+#   "디자인 파트에 지시를 하나 추가하고 싶다" 를 실제로 가능하게 하는 부분이다.
+#   저장하면 그 역할이 **다음에 일할 때** 프롬프트 맨 뒤에 붙는다.
+
+class NoteIn(BaseModel):
+    text: str
+
+
+@router.get("/{role}/notes")
+async def get_notes(role: str):
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    return {"ok": True, "data": {
+        "role": role,
+        "text": directives.read(role),
+        "items": directives.items(role),
+        "global_text": directives.read(None),
+        "global_items": directives.items(None),
+        "path": str(directives.role_path(role).relative_to(REPO_ROOT)),
+        "global_path": str(directives.global_path().relative_to(REPO_ROOT)),
+        "applies_when": "이 역할이 다음에 일할 때 자동으로 반영된다. "
+                        "지금 돌고 있는 단계에 넣으려면 일시정지 후 ↻재요청 해라.",
+    }}
+
+
+@router.post("/{role}/notes")
+async def add_note(role: str, body: NoteIn, db: Session = Depends(get_db)):
+    """한 줄 추가 — 웹의 빠른 입력창이 쓴다."""
+    if role not in ROLES and role != "_global":
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "빈 지시는 넣을 수 없다")
+    target = None if role == "_global" else role
+    directives.append(text, target, who="pm")
+    services.audit(db, "pm", "directive.add",
+                   f"role:{role}", {"text": text[:200]})
+    db.commit()
+    return {"ok": True, "data": {"role": role, "items": directives.items(target),
+                                 "note": "다음 실행부터 반영된다"}}
+
+
+@router.put("/{role}/notes", response_class=PlainTextResponse)
+async def put_notes(role: str, body: str = Body(..., media_type="text/plain"),
+                    db: Session = Depends(get_db)):
+    """통째로 저장 — 편집기가 쓴다. 빈 내용이면 지시를 전부 취소한다."""
+    if role not in ROLES and role != "_global":
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    target = None if role == "_global" else role
+    directives.write(body, target)
+    services.audit(db, "pm", "directive.write", f"role:{role}",
+                   {"bytes": len(body)})
+    db.commit()
+    return "저장했다. 다음 실행부터 반영된다" if body.strip() else "지시를 비웠다"
+
+
+@router.delete("/{role}/notes")
+async def clear_notes(role: str, db: Session = Depends(get_db)):
+    target = None if role == "_global" else role
+    directives.write("", target)
+    services.audit(db, "pm", "directive.clear", f"role:{role}", {})
+    db.commit()
+    return {"ok": True, "data": {"role": role, "items": []}}
+
+
+@router.get("/{role}/check")
+async def check_output(role: str, cycle: int | None = Query(None),
+                       step: str | None = Query(None),
+                       db: Session = Depends(get_db)):
+    """이 역할의 산출물이 완료 조건을 지켰는지 **지금 다시** 검사한다.
+
+    HQ 가 단계 직후에 자동으로 하는 것과 같은 검사다. 사람이 산출물을 손으로 고친 뒤
+    "이제 됐나" 를 확인할 수 있어야 해서 버튼으로도 뽑아 둔다.
+    """
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    c = db.get(Cycle, cycle) if cycle else _latest_cycle(db)
+    if c is None:
+        raise HTTPException(404, "사이클이 없다")
+
+    pl = pipelines.load(c.pipeline)
+    cands: list[Path] = []
+    for s in db.scalars(select(Step).where(Step.cycle_id == c.id)).all():
+        if step and s.step_key != step:
+            continue
+        d = pl.step(s.step_key)
+        rs = list(d.roles) if d else ([s.role] if s.role else [])
+        if role not in rs:
+            continue
+        base = REPO_ROOT / "runs" / str(c.id) / s.step_key / "output"
+        cands.append(base / role if len(rs) > 1 else base)
+
+    result = []
+    for out in cands:
+        if not out.exists():
+            continue
+        fs = checks.check(role, out, {"screens": runner._screen_count(c.id)})
+        if not fs:
+            continue
+        ok, total = checks.score(fs)
+        result.append({
+            "dir": str(out.relative_to(REPO_ROOT)),
+            "ok": ok, "total": total,
+            "findings": [{"ok": f.ok, "label": f.label,
+                          "detail": f.detail, "fix": f.fix} for f in fs],
+        })
+    return {"ok": True, "data": {"role": role, "cycle": c.id, "results": result}}
 
 
 @router.get("/{role}")
@@ -79,6 +217,21 @@ async def agent_detail(role: str, cycle: int | None = Query(None),
         },
         "spec": None, "steps": [], "messages": [], "artifacts": [],
         "current": None, "cycle": None,
+        # 이 역할이 무엇을 하는 사람인가 (roles.yaml)
+        "catalog": {k: v for k, v in roles_catalog.get(role).items()
+                    if k in ("mission", "goals", "dod", "forbid", "owns",
+                             "asks", "default", "steps", "reads", "handoff")},
+        # 사람이 끼워 넣은 지시
+        "notes": {
+            "items": directives.items(role),
+            "global_items": directives.items(None),
+            "path": str(directives.role_path(role).relative_to(REPO_ROOT)),
+        },
+        "paths": {
+            "baseline": f"agents/{role}/AGENT.md",
+            "spec": str(services.spec_path(role).relative_to(REPO_ROOT)),
+            "notes": str(directives.role_path(role).relative_to(REPO_ROOT)),
+        },
     }
 
     c = db.get(Cycle, cycle) if cycle else _latest_cycle(db)
@@ -208,6 +361,12 @@ async def retry_step(role: str, step_key: str | None = Query(None),
 
     사이클이 RUNNING 중이면 받지 않는다. 먼저 일시정지해야 한다.
     """
+    return rerun_role_step(db, role, cycle, step_key)
+
+
+def rerun_role_step(db: Session, role: str, cycle: int | None,
+                    step_key: str | None, note: str = "") -> dict:
+    """`↻재요청` 의 실체. 프리뷰 화면의 「지금 고치기」도 이걸 부른다."""
     if role not in ROLES:
         raise HTTPException(404, f"그런 역할이 없다: {role}")
     c = db.get(Cycle, cycle) if cycle else _latest_cycle(db)
@@ -267,7 +426,7 @@ async def retry_step(role: str, step_key: str | None = Query(None),
                    {"step": target.step_key, "note": f"{role} 재요청"})
     db.commit()
     services.mirror(db, c.id, "pm", role, "request",
-                    f"{target.step_key} 재요청 — 다시 만들어 주세요")
+                    note or f"{target.step_key} 재요청 — 다시 만들어 주세요")
     runner.kick(c.id)
     return {"ok": True, "data": {"step": target.step_key, "role": role,
                                  "status": "RUNNING",

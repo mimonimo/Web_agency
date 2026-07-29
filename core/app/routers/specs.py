@@ -100,6 +100,35 @@ async def put_spec_raw(role: str, body: str = Body(..., media_type="text/plain")
     return r
 
 
+@router.get("/{role}/baseline", response_class=PlainTextResponse)
+async def get_baseline(role: str):
+    """기준선 — 사람(Claude Code)이 미리 써 둔 역할 지시문 원본.
+
+    학생 화면에서 "원래 뭐라고 적혀 있었나" 를 볼 수 있어야 한다.
+    읽기 전용이다. 이 파일은 git 이 추적하고, 수업 중에는 바뀌지 않는다.
+    """
+    from ..models import ROLES
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    txt = services.baseline_spec(role)
+    if not txt:
+        raise HTTPException(404, f"{role} 의 기준선이 없다 (agents/{role}/AGENT.md)")
+    return txt
+
+
+@router.get("/{role}/draft", response_class=PlainTextResponse)
+async def get_draft(role: str, cycle: int | None = Query(None),
+                    db: Session = Depends(get_db)):
+    """이번 사이클의 **초안** — 학생이 고치기 전 상태. 비교용."""
+    from ..models import ROLES
+    if role not in ROLES:
+        raise HTTPException(404, f"그런 역할이 없다: {role}")
+    p = REPO_ROOT / services.PROJECT_ID / ".drafts" / role / "AGENT.md"
+    if not p.exists():
+        raise HTTPException(404, f"{role} 의 초안이 아직 없다")
+    return p.read_text(encoding="utf-8")
+
+
 @router.post("/{role}/customized")
 async def mark_customized(role: str, cycle: int | None = Query(None),
                           db: Session = Depends(get_db)):

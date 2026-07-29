@@ -32,6 +32,7 @@ from .routers import (
     messages,
     nodes,
     orders,
+    review,
     specs,
     tickets,
 )
@@ -111,9 +112,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# BRIEF §7 의 8개 라우터
+# BRIEF §7 의 라우터 + 사람이 조작하는 화면용 라우터(agents·review)
 for r in (cycles, nodes, specs, tickets, orders, messages, artifacts,
-          dashboard, agents):
+          dashboard, agents, review):
     app.include_router(r.router)
 
 # HQ 자신도 A2A 에이전트로 노출 (선택 — BRIEF §2)
