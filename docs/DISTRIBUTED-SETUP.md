@@ -56,8 +56,10 @@ sed -i 's/^EXECUTOR=.*/EXECUTOR=a2a/' .env
 
 # ★ 노드 IP — 리포의 students.yaml 은 예시 값(10.0.0.x)이다.
 #   HQ 는 부팅할 때마다 이 파일로 노드 주소를 덮어쓴다.
-cp provisioning/students.yaml provisioning/students.local.yaml
-$EDITOR provisioning/students.local.yaml     # ip 를 실제 값으로
+#   파일을 옮겨 올 필요는 없다 — 노드 번호 규칙이 예시 파일에 이미 있어서
+#   **대역 앞 세 자리만** 바꾸면 11대가 다 맞는다. 만든 뒤 바로 확인까지 해 준다.
+./ops/set-nodes.sh 220.67.5
+./ops/set-nodes.sh --check                   # 나중에 확인만 할 때
 
 ./ops/dev.sh start        # → http://<HQ주소>:8000
 ```
@@ -82,7 +84,7 @@ $EDITOR provisioning/students.local.yaml     # ip 를 실제 값으로
 git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
 ./ops/bootstrap.sh                                   # HQ_SELF_URL 자동
 sed -i 's/^EXECUTOR=.*/EXECUTOR=a2a/' .env
-cp <노드IP 가 든 파일> provisioning/students.local.yaml
+./ops/set-nodes.sh 220.67.5                          # 노드 IP — 대역 세 자리만
 ./ops/dev.sh start
 ./ops/acceptance.sh --phase 2                        # 카드 11/11 이면 끝
 ```

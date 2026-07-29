@@ -96,14 +96,15 @@ ENV
 
 ```bash
 # 실제 IP 를 여기에 둔다. .gitignore 에 있어 커밋되지 않는다.
-sed 's/10\.0\.0\./<진짜대역>./g' provisioning/students.yaml \
-  > provisioning/students.local.yaml
-
-# .env
-EXECUTOR=a2a
-
+./ops/set-nodes.sh 220.67.5      # ← 대역 앞 세 자리만. 만든 뒤 11대를 바로 확인해 준다
+sed -i 's/^EXECUTOR=.*/EXECUTOR=a2a/' .env
 ./ops/dev.sh restart
 ```
+
+★ **이 파일을 USB 로 옮길 필요가 없다.** 예시 파일에 노드 번호 규칙
+(`dgx-02→.52` … `dgx-12→.62`)이 이미 들어 있어서 **앞 세 자리만 바꾸면** 11대가 다 맞는다.
+대역을 모르겠으면 노드 아무 데서나 `hostname -I` 를 찍어 보면 된다.
+나중에 확인만 하려면 `./ops/set-nodes.sh --check`.
 
 제대로 됐는지는 **부팅 로그 한 줄**과 **인수 한 항목**으로 확인한다.
 
