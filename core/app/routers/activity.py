@@ -166,12 +166,21 @@ async def feed(cycle: int | None = Query(None),
             if st == "RUNNING":
                 running.append(row)
 
+    # 사람이 눌러 둔 「지금 고치기」가 대기 중인지 — 눌렀는데 아무 반응 없어
+    # 보이면 다시 누르게 된다. 예약돼 있다는 사실을 화면에 띄운다.
+    queued = []
+    if c:
+        from .. import runner
+        queued = [{"role": r, "step": s, "note": n}
+                  for r, s, n in runner.pending_rerun(c.id)]
+
     return {"ok": True, "data": {
         "cycle": ({"id": c.id,
                    "status": c.status.value if hasattr(c.status, "value") else str(c.status),
                    "current_step": c.current_step} if c else None),
         "events": ev,
         "running": running,
+        "queued": queued,
         "steps": steps_all,
         "cursor": {
             "msg": max([e["id"] for e in ev if e["src"] == "msg"] + [after_msg]),

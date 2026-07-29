@@ -65,6 +65,7 @@
 <body>
 <div class="wrap">
   <div class="now" id="now"></div>
+  <div class="queued card" id="queued" hidden></div>
 
   <div class="cols">
     <div class="term">
@@ -99,7 +100,7 @@
 
 <script src="/assets/ui.js"></script>
 <script>
-let cursor = { msg: 0, log: 0 }, roles = {}, running = [], tick = null, lastErr = 0;
+let cursor = { msg: 0, log: 0 }, roles = {}, running = [], queued = [], lastErr = 0;
 
 nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/review.html">👀 보고 고치기</a>');
 
@@ -117,6 +118,14 @@ function line(e) {
     <span class="ac" title="${esc(who)}">${esc(who)}</span>
     <span class="tx">${esc(e.text)}${e.detail ? ` <span class="dt">${esc(e.detail)}</span>` : ""}</span>
   </div>`;
+}
+
+function drawQueued() {
+  const box = $("queued");
+  if (!queued.length) { box.innerHTML = ""; box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<b>⏳ 예약된 수정 요청 ${queued.length}건</b> — 지금 단계가 끝나는 즉시 반영됩니다<br>` +
+    queued.map(q => `<span class="chip on">${esc(roles[q.role] || q.role)}</span> ${esc(q.note)}`).join("<br>");
 }
 
 function drawNow() {
@@ -176,6 +185,7 @@ async function poll() {
     const d = await api(`/api/activity?after_msg=${cursor.msg}&after_log=${cursor.log}&limit=120`);
     roles = d.roles || roles;
     running = d.running || [];
+    queued = d.queued || [];
     const first = cursor.msg === 0 && cursor.log === 0;
     cursor = d.cursor;
     $("cstat").innerHTML = d.cycle
@@ -191,7 +201,7 @@ async function poll() {
       while (box.children.length > 600) box.removeChild(box.firstChild);
       if ($("follow").checked && (atBottom || first)) box.scrollTop = box.scrollHeight;
     }
-    drawNow(); drawAgents();
+    drawNow(); drawQueued(); drawAgents();
     lastErr = 0;
   } catch (e) {
     if (!lastErr++) $("cstat").innerHTML = `<span class="bad-mark">연결 실패 — 재시도 중</span>`;

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from pathlib import Path
@@ -52,16 +53,47 @@ def kick(cycle_id: int) -> None:
 #   사이클이 돌고 있는 동안에는 단계를 다시 시킬 수 없다 (한 사이클에 실행기 하나).
 #   그렇다고 사람에게 "끝날 때까지 기다렸다가 다시 누르세요" 라고 할 수는 없다.
 #   그래서 예약해 두고 지금 단계가 끝나는 순간 실행기가 스스로 처리한다.
-#   {cycle_id: [(role, step_key|None, note), ...]}
-_RERUN: dict[int, list[tuple[str, str | None, str]]] = {}
+#
+#   ⚠️ 파일에 남긴다. 메모리에만 두면 HQ 를 재시작하는 순간 사람이 누른 요청이
+#      말없이 사라진다. 사람이 누른 것은 잃어버리면 안 된다.
+_RERUN_FILE = REPO_ROOT / PROJECT_ID / ".rerun.json"
+
+
+def _rerun_load() -> dict[str, list[list]]:
+    try:
+        return json.loads(_RERUN_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _rerun_save(data: dict[str, list[list]]) -> None:
+    try:
+        _RERUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if data:
+            _RERUN_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
+        else:
+            _RERUN_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def queue_rerun(cycle_id: int, role: str, step_key: str | None, note: str) -> None:
-    _RERUN.setdefault(cycle_id, []).append((role, step_key, note))
+    d = _rerun_load()
+    d.setdefault(str(cycle_id), []).append([role, step_key, note])
+    _rerun_save(d)
 
 
 def pending_rerun(cycle_id: int) -> list[tuple[str, str | None, str]]:
-    return list(_RERUN.get(cycle_id, ()))
+    return [(r, s, n) for r, s, n in _rerun_load().get(str(cycle_id), [])]
+
+
+def _rerun_take(cycle_id: int) -> list[tuple[str, str | None, str]]:
+    d = _rerun_load()
+    items = d.pop(str(cycle_id), [])
+    if items:
+        _rerun_save(d)
+    return [(r, s, n) for r, s, n in items]
 
 
 def _apply_pending_rerun(db: Any, cycle: Any) -> bool:
@@ -74,7 +106,7 @@ def _apply_pending_rerun(db: Any, cycle: Any) -> bool:
 
     from .models import Artifact
 
-    items = _RERUN.pop(cycle.id, None)
+    items = _rerun_take(cycle.id)
     if not items:
         return False
 
