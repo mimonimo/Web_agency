@@ -79,6 +79,77 @@ async def file_tree(path: str = Query("", description="repo/ 기준 상대 경�
 VIEW_EXT = {".html", ".htm", ".css", ".js", ".json", ".svg", ".png", ".jpg",
             ".jpeg", ".gif", ".webp", ".md", ".txt"}
 
+# 검색에서 통째로 건너뛸 디렉터리 — 이게 없으면 node_modules 하나에 몇 분이 걸린다
+SKIP_DIR = HIDE | {"node_modules", "dist", "build", ".venv", "venv"}
+
+
+def _walk(root, limit: int = 4000):
+    """repo/ 를 훑되 무거운 디렉터리는 통째로 건너뛴다."""
+    stack, n = [root], 0
+    while stack and n < limit:
+        d = stack.pop()
+        try:
+            entries = list(d.iterdir())
+        except OSError:
+            continue
+        for p in entries:
+            if p.name in SKIP_DIR or p.name.startswith("."):
+                continue
+            if p.is_dir():
+                stack.append(p)
+            else:
+                n += 1
+                yield p
+                if n >= limit:
+                    return
+
+
+@files_router.get("/find")
+async def find_files(q: str = Query("", description="파일 이름 조각"),
+                     text: str = Query("", description="본문에 든 말"),
+                     limit: int = Query(60, le=300)):
+    """**repo/ 전체**에서 파일을 찾는다.
+
+    산출물은 `runs/<사이클>/<단계>/output/<역할>/…` 로 깊다.
+    이름을 알면서도 폴더를 5~6번 눌러 들어가야 했다 — 그게 "파일 조회가 불편하다" 의
+    실체였다. 이름 조각이나 본문 한 마디로 바로 집어낸다.
+
+    아무 조건도 없으면 **최근에 바뀐 순서**로 준다. 수업 중에는 대개 그게 정답이다 —
+    방금 에이전트가 만든 것이 맨 위에 온다.
+    """
+    ql, tl = q.strip().lower(), text.strip().lower()
+    root = REPO_ROOT.resolve()
+    hits = []
+    for p in _walk(root):
+        if ql and ql not in p.name.lower():
+            continue
+        snippet = ""
+        if tl:
+            if p.suffix.lower() not in TEXT_EXT:
+                continue
+            try:
+                body = p.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            i = body.lower().find(tl)
+            if i < 0:
+                continue
+            snippet = body[max(0, i - 40): i + 80].replace("\n", " ")
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        hits.append({"name": p.name, "path": str(p.relative_to(root)),
+                     "type": "file", "size": st.st_size, "mtime": st.st_mtime,
+                     "snippet": snippet,
+                     "editable": p.suffix.lower() in TEXT_EXT,
+                     "viewable": p.suffix.lower() in VIEW_EXT})
+    # 이름을 검색했으면 짧은 이름(=정확한 것)부터, 아니면 최근 것부터
+    hits.sort(key=(lambda h: (len(h["name"]), -h["mtime"])) if ql
+              else (lambda h: -h["mtime"]))
+    return {"ok": True, "data": {"items": hits[:limit], "total": len(hits),
+                                 "q": q, "text": text}}
+
 
 class NewFile(BaseModel):
     path: str

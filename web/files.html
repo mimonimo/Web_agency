@@ -6,50 +6,77 @@
 <title>파일 탐색기 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .wrap{flex:1;display:flex;flex-direction:column;gap:.8rem;padding:1rem;min-height:0}
-  .crumb{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;
-         background:var(--panel);border:1px solid var(--line);border-radius:10px;
-         padding:.6rem .9rem;font-family:ui-monospace,monospace;font-size:.98rem}
+  .wrap{flex:1;display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);min-height:0}
+
+  /* 찾기 줄 — 폴더를 파고들지 않고 바로 집어내는 곳 */
+  .find{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;
+        background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
+        padding:var(--s2) var(--s3)}
+  .find .grow{flex:1;min-width:14rem}
+  .find input{width:100%}
+  .find .hint{color:var(--dim);font-size:.86rem}
+
+  .quick{display:flex;gap:var(--s1);flex-wrap:wrap}
+  .quick a{font-size:.9rem}
+  .quick a.on{background:var(--accent);color:#06121f;border-color:transparent;font-weight:700}
+
+  .crumb{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;
+         font-family:ui-monospace,monospace;font-size:.95rem}
   .crumb a{color:#a5d8ff;text-decoration:none;font-weight:650}
   .crumb a:hover{text-decoration:underline}
   .crumb .sep{color:var(--dim)}
-  .crumb .act{margin-left:auto;display:flex;gap:.4rem;font-family:system-ui}
+  .crumb .act{margin-left:auto;display:flex;gap:var(--s1);font-family:system-ui}
 
-  .quick{display:flex;gap:.4rem;flex-wrap:wrap}
-
-  .cols{flex:1;display:grid;grid-template-columns:minmax(20rem,26rem) 1fr;gap:1rem;min-height:0}
+  .cols{flex:1;display:grid;grid-template-columns:minmax(20rem,28rem) 1fr;gap:var(--s3);min-height:0}
   @media (max-width:980px){ .cols{grid-template-columns:1fr} }
   .card{display:flex;flex-direction:column;min-height:0}
 
   .list{flex:1;overflow-y:auto}
-  .list a{display:flex;gap:.55rem;align-items:center;padding:.45rem .5rem;
-    border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;font-size:.97rem}
-  .list a:hover{background:#1c2432}
-  .list a.on{background:#1b2740}
-  .list .ic{width:1.4rem;text-align:center}
-  .list .nm{flex:1;font-family:ui-monospace,monospace;font-size:.93rem;
+  .row{display:flex;gap:.55rem;align-items:center;padding:.42rem .5rem;
+    border-bottom:1px solid #232b3a;color:var(--fg);text-decoration:none;
+    font-size:.96rem;cursor:pointer}
+  .row:hover{background:#1c2432}
+  .row.on{background:#1b2740;box-shadow:inset 3px 0 0 var(--accent)}
+  .row .ic{width:1.3rem;text-align:center}
+  .row .nm{flex:1;min-width:0;font-family:ui-monospace,monospace;font-size:.92rem;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .list .meta{color:var(--dim);font-size:.85rem;white-space:nowrap}
-  .list .go{color:#86efac;font-size:.85rem}
+  .row .dirpart{color:var(--dim)}
+  .row .meta{color:var(--dim);font-size:.83rem;white-space:nowrap}
+  .row .go{color:#86efac;font-size:.83rem;border:1px solid #2b6b46;
+    border-radius:var(--r-pill);padding:0 .45rem}
+  .row .snip{display:block;color:var(--dim);font-size:.82rem;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  mark{background:#4a3c00;color:#ffe08a;border-radius:3px}
 
-  textarea{flex:1;min-height:24rem}
+  textarea{flex:1;min-height:22rem}
   .imgbox{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;
-    background:#0f131b;border:1.5px solid var(--line);border-radius:9px}
+    background:#0f131b;border:1.5px solid var(--line);border-radius:var(--r-md)}
   .imgbox img{max-width:100%}
-  iframe.pv{flex:1;min-height:24rem;border:0;border-radius:9px;background:#fff}
-  .fmeta{display:flex;gap:.8rem;flex-wrap:wrap;color:var(--dim);font-size:.9rem;margin-bottom:.5rem}
+  iframe.pv{flex:1;min-height:22rem;border:0;border-radius:var(--r-md);background:#fff}
+  .fmeta{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;
+         color:var(--dim);font-size:.88rem;margin-bottom:var(--s2)}
 </style>
 </head>
 <body>
 <div class="wrap">
+
+  <div class="find">
+    <span>🔎</span>
+    <span class="grow"><input class="box" id="q" autocomplete="off"
+      placeholder="파일 이름으로 repo 전체에서 찾기 —  index.html · SRS · VERDICT"></span>
+    <span class="grow"><input class="box" id="t" autocomplete="off"
+      placeholder="본문에 든 말로 찾기 —  예약 · --color · 판정: 반려"></span>
+    <button class="btn sm" id="clear">지우기</button>
+    <span class="hint" id="fhint"></span>
+  </div>
+
   <div class="quick" id="quick"></div>
   <div class="crumb" id="crumb"></div>
 
   <div class="cols">
     <div class="card">
-      <h3>파일
+      <h3><span id="listTitle">파일</span>
         <span class="act">
-          <input class="box" id="filter" placeholder="이름으로 걸러내기" style="width:11rem;padding:.3rem .55rem;font-size:.9rem">
           <button class="btn sm" id="mknew">+ 새 파일</button>
           <span class="muted" id="count"></span>
         </span></h3>
@@ -67,7 +94,7 @@
         </span></h3>
       <div class="fmeta" id="fmeta"></div>
       <textarea class="box" id="body" spellcheck="false"
-        placeholder="왼쪽에서 파일을 고르면 내용이 나옵니다"></textarea>
+        placeholder="왼쪽에서 파일을 고르면 내용이 나옵니다 — ↑↓ 로 옮기고 Enter 로 열 수 있습니다"></textarea>
       <iframe class="pv" id="pv" hidden title="파일 미리보기"></iframe>
       <div class="imgbox" id="imgbox" hidden><img id="img" alt="이미지 미리보기"></div>
     </div>
@@ -76,28 +103,91 @@
 
 <script src="/assets/ui.js"></script>
 <script>
-let dir = new URLSearchParams(location.search).get("path") || "";
-let cur = null, base = "", items = [], mode = "edit";
+/* 파일 조회 — 두 가지 모드가 한 화면에 있다.
+     ① 폴더 탐색  ?path=…      (주소로 공유·북마크된다)
+     ② 전체 검색  ?q=… / ?t=…  (폴더를 몰라도 된다)
+   ②가 이 화면의 존재 이유다. 산출물은 runs/<사이클>/<단계>/output/<역할>/ 로 깊어서
+   이름을 알면서도 다섯 번을 눌러야 했다. */
+let dir = "", cur = null, base = "", items = [], mode = "edit", sel = -1, searching = false;
 
 nav('<span id="cyc" class="muted"></span>');
 cycleBadge($("cyc"));
 
 const IMG = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
 const WEB = /\.(html?|css|js|json|svg|md|txt)$/i;
+const hi = (s, q) => !q ? esc(s)
+  : esc(s).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), m => `<mark>${m}</mark>`);
+
+/* ── 주소 ↔ 화면 ─────────────────────────────────────────────
+   폴더를 누를 때마다 페이지를 새로 받으면 느리고 열어 둔 파일이 날아간다.
+   pushState 로 주소만 바꾸고 목록만 갈아끼운다. 뒤로가기도 그대로 된다. */
+function readURL() {
+  const u = new URLSearchParams(location.search);
+  dir = u.get("path") || "";
+  $("q").value = u.get("q") || "";
+  $("t").value = u.get("t") || "";
+  searching = !!($("q").value || $("t").value);
+}
+function go(next, push = true) {
+  const u = new URLSearchParams();
+  if (next.q) u.set("q", next.q);
+  if (next.t) u.set("t", next.t);
+  if (!next.q && !next.t && next.path) u.set("path", next.path);
+  const url = "?" + u.toString();
+  if (push) history.pushState(null, "", url); else history.replaceState(null, "", url);
+  readURL(); load();
+}
+addEventListener("popstate", () => { readURL(); load(); });
 
 async function quick() {
   let cid = "";
   try { const d = await api("/api/dashboard"); if (d.cycle) cid = d.cycle.id; } catch {}
-  $("quick").innerHTML = [
-    ["repo/ 전체", ""],
-    ["확정 산출물", "project-001"],
-    ["AGENT.md 11개", "project-001/agents"],
-    ...(cid ? [[`사이클 #${cid} 실행 결과`, `runs/${cid}`]] : []),
-    ["보존본(showcase)", "showcase"],
-  ].map(([ko, p]) => `<a href="?path=${encodeURIComponent(p)}">${ko}</a>`).join("");
+  const chips = [
+    ["🕘 최근 바뀐 파일", { q: "", t: "", recent: 1 }],
+    ["repo/ 전체", { path: "" }],
+    ["확정 산출물", { path: "project-001" }],
+    ["AGENT.md 11개", { path: "project-001/agents" }],
+    ...(cid ? [[`사이클 #${cid} 결과`, { path: `runs/${cid}` }]] : []),
+    ["보존본(showcase)", { path: "showcase" }],
+    ["🌐 사이트만", { q: "index.html", t: "" }],
+  ];
+  $("quick").innerHTML = chips.map(([ko], i) => `<a class="btn sm" data-i="${i}">${ko}</a>`).join("");
+  $("quick").querySelectorAll("a").forEach(a => a.onclick = () => {
+    const t = chips[+a.dataset.i][1];
+    if (t.recent) { $("q").value = ""; $("t").value = ""; searching = true; history.pushState(null, "", "?recent=1"); load(); }
+    else go(t);
+  });
 }
 
-async function ls() {
+/* 입력하는 대로 찾는다. 250ms 쉬면 보낸다 — 글자마다 보내면 repo 를 계속 훑는다. */
+let timer = null;
+const onType = () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => go({ q: $("q").value.trim(), t: $("t").value.trim(), path: dir }, false), 250);
+};
+$("q").oninput = onType; $("t").oninput = onType;
+$("clear").onclick = () => { $("q").value = ""; $("t").value = ""; go({ path: dir }); };
+
+async function load() {
+  const q = $("q").value.trim(), t = $("t").value.trim();
+  const recent = new URLSearchParams(location.search).has("recent");
+  searching = !!(q || t || recent);
+  sel = -1;
+
+  if (searching) {
+    $("crumb").innerHTML = "";
+    $("listTitle").textContent = (q || t) ? "찾은 파일" : "최근 바뀐 파일";
+    $("fhint").textContent = "찾는 중…";
+    let d;
+    try { d = await api(`/api/files/find?q=${encodeURIComponent(q)}&text=${encodeURIComponent(t)}`); }
+    catch (e) { $("list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; $("fhint").textContent = ""; return; }
+    items = d.items || [];
+    $("fhint").textContent = `repo 전체 ${d.total}건${d.total > items.length ? ` (${items.length}건 표시)` : ""}`;
+    paint(); return;
+  }
+
+  $("fhint").textContent = "";
+  $("listTitle").textContent = "파일";
   let d;
   try { d = await api(`/api/files/tree?path=${encodeURIComponent(dir)}`); }
   catch (e) { $("list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
@@ -106,14 +196,16 @@ async function ls() {
   const parts = dir ? dir.split("/") : [];
   let acc = "";
   $("crumb").innerHTML =
-    `<a href="?path=">repo</a>` + parts.map(p => {
+    `<a data-go="">repo</a>` + parts.map(p => {
       acc = acc ? `${acc}/${p}` : p;
-      return `<span class="sep">/</span><a href="?path=${encodeURIComponent(acc)}">${esc(p)}</a>`;
+      return `<span class="sep">/</span><a data-go="${esc(acc)}">${esc(p)}</a>`;
     }).join("") +
     `<span class="act">
        <button class="btn sm" id="copydir">경로 복사</button>
        ${d.site_url ? `<a class="btn sm primary" target="_blank" rel="noopener" href="${esc(d.site_url)}">🌐 사이트 열기</a>` : ""}
      </span>`;
+  $("crumb").querySelectorAll("a[data-go]").forEach(a =>
+    a.onclick = () => go({ path: a.dataset.go }));
   $("copydir").onclick = () => {
     navigator.clipboard?.writeText(dir || "repo/");
     toast("경로를 복사했습니다", "ok", 2000);
@@ -122,30 +214,54 @@ async function ls() {
 }
 
 function paint() {
-  const q = $("filter").value.trim().toLowerCase();
-  const show = items.filter(it => !q || it.name.toLowerCase().includes(q));
-  const up = dir ? `<a href="?path=${encodeURIComponent(dir.split("/").slice(0, -1).join("/"))}">
-      <span class="ic">↰</span><span class="nm">..</span></a>` : "";
-  $("list").innerHTML = up + show.map(it => it.type === "dir"
-    ? `<a href="?path=${encodeURIComponent(it.path)}">
-         <span class="ic">📁</span><span class="nm">${esc(it.name)}</span>
-         <span class="meta">${it.count}개</span></a>`
-    : `<a href="#" data-p="${esc(it.path)}" class="${cur === it.path ? "on" : ""}">
-         <span class="ic">${IMG.test(it.name) ? "🖼" : "📄"}</span>
-         <span class="nm">${esc(it.name)}</span>
-         <span class="meta">${sz(it.size)}</span>
-         ${WEB.test(it.name) || IMG.test(it.name)
-           ? `<span class="go" data-open="${esc(it.path)}">열기</span>` : ""}</a>`
-  ).join("") || `<div class="empty">비어 있습니다.</div>`;
-  $("count").textContent = `${show.length}${q ? ` / ${items.length}` : ""}개`;
+  const q = $("q").value.trim();
+  const up = (!searching && dir)
+    ? `<div class="row" data-up="1"><span class="ic">↰</span><span class="nm">..</span></div>` : "";
 
-  $("list").querySelectorAll("a[data-p]").forEach(a => a.onclick = (e) => {
-    e.preventDefault();
+  $("list").innerHTML = up + items.map((it, i) => {
+    if (it.type === "dir")
+      return `<div class="row" data-dir="${esc(it.path)}" data-i="${i}">
+        <span class="ic">📁</span><span class="nm">${hi(it.name, q)}</span>
+        <span class="meta">${it.count}개</span></div>`;
+    // 검색 결과는 어디 있는 파일인지가 이름만큼 중요하다 — 폴더를 앞에 붙여 보여준다
+    const d = it.path.slice(0, it.path.length - it.name.length);
+    const nm = searching
+      ? `<span class="dirpart">${esc(d)}</span>${hi(it.name, q)}` : hi(it.name, q);
+    return `<div class="row ${cur === it.path ? "on" : ""}" data-p="${esc(it.path)}" data-i="${i}">
+        <span class="ic">${IMG.test(it.name) ? "🖼" : "📄"}</span>
+        <span class="nm">${nm}${it.snippet ? `<span class="snip">${esc(it.snippet)}</span>` : ""}</span>
+        <span class="meta">${sz(it.size)}</span>
+        ${WEB.test(it.name) || IMG.test(it.name)
+          ? `<span class="go" data-open="${esc(it.path)}">열기</span>` : ""}</div>`;
+  }).join("") || `<div class="empty">${searching ? "찾는 것이 없습니다." : "비어 있습니다."}</div>`;
+
+  $("count").textContent = `${items.length}개`;
+
+  $("list").querySelectorAll(".row").forEach(r => r.onclick = (e) => {
+    if (r.dataset.up !== undefined) return go({ path: dir.split("/").slice(0, -1).join("/") });
     if (e.target.dataset.open) { window.open("/preview/" + e.target.dataset.open, "_blank"); return; }
-    open_(a.dataset.p);
+    if (r.dataset.dir !== undefined) return go({ path: r.dataset.dir });
+    sel = +r.dataset.i; open_(r.dataset.p);
   });
 }
-$("filter").oninput = paint;
+
+/* ↑↓ 로 옮기고 Enter 로 연다. 검색 결과를 훑을 때 마우스로 오가지 않아도 된다. */
+addEventListener("keydown", (e) => {
+  const inBox = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (!$("save").disabled) $("save").click(); return; }
+  if (e.key === "/" && !inBox) { e.preventDefault(); $("q").focus(); $("q").select(); return; }
+  if (inBox && document.activeElement.id === "body") return;
+  if (e.key === "Escape" && inBox) { document.activeElement.blur(); return; }
+  if (!["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
+  if (inBox && e.key === "Enter") { clearTimeout(timer); go({ q: $("q").value.trim(), t: $("t").value.trim(), path: dir }); return; }
+  const rows = [...$("list").querySelectorAll(".row")];
+  if (!rows.length) return;
+  e.preventDefault();
+  if (e.key === "Enter") { rows[Math.max(0, sel)]?.click(); return; }
+  sel = Math.min(rows.length - 1, Math.max(0, sel + (e.key === "ArrowDown" ? 1 : -1)));
+  rows.forEach((r, i) => r.classList.toggle("on", i === sel));
+  rows[sel].scrollIntoView({ block: "nearest" });
+});
 
 function setMode(m) {
   mode = m;
@@ -159,13 +275,17 @@ function setMode(m) {
 
 async function open_(p) {
   cur = p;
-  $("fname").textContent = p;
+  $("fname").textContent = p.split("/").pop();
   const it = items.find(x => x.path === p) || {};
   $("fmeta").innerHTML =
-    `<span>${sz(it.size || 0)}</span>
+    `<span class="pathbox">${esc(p)}</span>
+     <span>${sz(it.size || 0)}</span>
      <span>${it.mtime ? new Date(it.mtime * 1000).toLocaleString("ko-KR") : ""}</span>
-     <span class="pathbox">${esc(p)}</span>`;
-  paint();
+     <button class="btn sm" id="copyp">경로 복사</button>
+     <button class="btn sm" id="gofolder">폴더 열기</button>`;
+  $("copyp").onclick = () => { navigator.clipboard?.writeText(p); toast("경로를 복사했습니다", "ok", 2000); };
+  $("gofolder").onclick = () => { $("q").value = ""; $("t").value = ""; go({ path: p.split("/").slice(0, -1).join("/") }); };
+  $("list").querySelectorAll(".row").forEach(r => r.classList.toggle("on", r.dataset.p === p));
 
   if (IMG.test(p)) { $("img").src = "/preview/" + p; setMode("view"); $("save").disabled = true; return; }
   $("pv").src = "/preview/" + p + "?t=" + Date.now();
@@ -203,10 +323,10 @@ $("mknew").onclick = () => {
   act($("mknew"), () => api("/api/files", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: (dir ? dir + "/" : "") + name, content: "" }),
-  }), "만들었습니다").then(ls).catch(() => {});
+  }), "만들었습니다").then(load).catch(() => {});
 };
 
-quick(); ls();
+readURL(); quick(); load();
 </script>
 </body>
 </html>

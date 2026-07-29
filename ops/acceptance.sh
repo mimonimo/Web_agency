@@ -419,6 +419,7 @@ phase6() {
   done
 
   for u in "/api/activity" "/api/activity/prompt?role=designer" \
+           "/api/files/find" "/api/files/find?q=index.html" \
            "/api/review/current" "/api/review/projects" \
            "/api/agents" "/api/agents/designer/catalog" \
            "/api/agents/designer/notes" "/api/agents/designer/check" \
@@ -437,6 +438,18 @@ phase6() {
     ng "사람이 넣은 지시가 프롬프트에 안 들어간다"
   fi
   curl -sf -X DELETE "$HQ/api/agents/designer/notes" >/dev/null 2>&1
+
+  # ★ 폴더를 몰라도 파일을 집어내는가 — "파일 조회가 불편하다" 에 대한 답
+  if curl -sf "$HQ/api/files/find?q=RESULT.md" | grep -q '"path"'; then
+    ok "★ 이름만으로 repo 전체에서 파일을 찾는다"
+  else
+    ng "전체 검색이 파일을 못 찾는다"
+  fi
+  if curl -sf "$HQ/api/files/find?text=%ED%8C%90%EC%A0%95" | grep -q '"snippet"'; then
+    ok "★ 본문 검색이 앞뒤 문맥까지 준다"
+  else
+    ng "본문 검색이 동작하지 않는다"
+  fi
 
   # 프롬프트에 역할 목표·완료조건이 실리는가
   if curl -sf "$HQ/api/activity/prompt?role=frontend" | grep -q "완료 조건"; then

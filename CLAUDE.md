@@ -740,3 +740,59 @@ GitHub: https://github.com/mimonimo/Web_agency
   `EXECUTOR` 에 이름을 더하면 된다 — 지시문·검사·개입은 그대로 쓴다.
 - `sudo bash ~/agora-ops/expose-dgx12.sh` (8000·11434 개방, root 필요) 미실행.
 - `provisioning/students.yaml` 의 학생 이름이 비어 있다.
+
+---
+
+## 노드를 무엇으로든 굴린다 · 파일 조회 (2026-07-29)
+
+PM 지시: **"깃허브에 모든 사항이 기재되어 있어야 claude 연결해서 PC 11대 분산작업 하지."**
+**"DGX 에서 안 할 수도 있어서 그럼."** **"파일 조회하는 부분도 지금 너무 불편함."**
+
+### 노드 백엔드 — `AGORA_BACKEND`
+
+어댑터가 Hermes+Ollama 만 부를 줄 알았다. DGX 가 아닌 PC 에 Claude 를 붙일 길이 없었다.
+
+| | 무엇이 도나 | 파일을 누가 쓰나 |
+|---|---|---|
+| `claude` | Claude Code CLI (`claude -p …`) | CLI 가 직접 |
+| `anthropic` | Claude API `/v1/messages` | 어댑터가 저장 |
+| `openai` | OpenAI 호환 (Ollama·vLLM·LM Studio) | 어댑터가 저장 |
+| `hermes` (기본) | Hermes + 로컬 Ollama | Hermes 가 직접 |
+
+- **표준 라이브러리만 쓴다** (`urllib`). 노드 11대에 pip 설치를 요구하지 않는다 —
+  Phase 2 에서 A2A SDK 를 버린 것과 같은 이유다.
+- API 백엔드는 글만 돌아오므로 `=== FILE: … ===` 규약을 붙여 받는다.
+  **규약을 어긴 응답은 저장하지 않고 실패로 돌린다.** 통짜로 저장하면 엉뚱한 내용이
+  `index.html` 이 되어 아무도 원인을 못 찾는다.
+- 실측: dgx-05 의 Ollama 를 `openai` 백엔드로 불러 파일 생성·파싱까지 왕복 확인.
+  노드 10대에 새 어댑터 배포 후 카드 11/11.
+
+구성 전 과정은 [`docs/DISTRIBUTED-SETUP.md`](docs/DISTRIBUTED-SETUP.md) —
+백엔드별 `.env`, `@reboot` 등록, 확인법, **PC 가 부족하면 한 대에서 11개 역할 띄우는 법**까지.
+
+### 파일 조회 — 폴더를 몰라도 되게
+
+산출물은 `runs/<사이클>/<단계>/output/<역할>/…` 로 깊다. **이름을 알면서도
+폴더를 다섯 번 눌러 들어가야 했다** — 그게 "불편하다" 의 실체였다.
+
+- `GET /api/files/find?q=&text=` 신설. 이름 조각 · 본문 한 마디로 repo 전체에서 집어낸다.
+  본문 검색은 앞뒤 문맥(`snippet`)까지 준다. 아무 조건도 없으면 **최근에 바뀐 순** —
+  수업 중에는 대개 그게 정답이다(방금 에이전트가 만든 것이 맨 위).
+- `node_modules`·`.venv`·`dist` 는 통째로 건너뛴다. 없으면 검색 한 번에 몇 분이 걸린다.
+- 화면: 폴더 이동이 **페이지를 새로 받지 않는다**(pushState). 열어 둔 파일이 안 날아가고
+  뒤로가기도 그대로 된다. `/` 로 검색창, `↑↓`·`Enter` 로 목록, `Ctrl+S` 로 저장.
+- 검색 결과는 **어디 있는 파일인지**를 이름 앞에 흐리게 붙여 준다. 이름만으로는 부족하다 —
+  `index.html` 이 세 벌이다.
+
+### 검증
+
+```
+ops/acceptance.sh   통과 116 · 실패 0   (전체 검색·본문 검색 인수 항목 신설)
+노드 10대 재배포     ==> 전체 PASS · 에이전트 카드 11/11
+```
+
+### 남은 이슈
+
+- `sudo bash ~/agora-ops/expose-dgx12.sh` (8000·11434 개방, root 필요) 미실행.
+- `provisioning/students.yaml` 의 학생 이름이 비어 있다.
+- defect 파이프라인 S1/S6 모순 — 여전히 미해결.
