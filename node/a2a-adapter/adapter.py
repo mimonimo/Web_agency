@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -60,6 +61,19 @@ HQ = os.getenv("AGORA_HQ_URL", ENV.get("AGORA_HQ_URL", "http://10.0.0.62:8000"))
 MODEL = ENV.get("AGORA_MODEL", "gpt-oss:120b")
 WORKROOT = Path(ENV.get("AGORA_WORKSPACE", str(NODE_DIR / "workspace")))
 HERMES = str(HOME / ".local" / "bin" / "hermes")
+CLAUDE_BIN = os.getenv("AGORA_CLAUDE_BIN", ENV.get("AGORA_CLAUDE_BIN", "claude"))
+
+# ★ 이 노드가 무엇으로 일하나 — hermes | anthropic | openai
+#   hermes    교실 DGX — 로컬 Ollama
+#   claude    Claude Code CLI 가 파일을 직접 쓴다 (PC 11대에 Claude 를 붙일 때)
+#   anthropic Claude API 직접 호출 (CLI 없이)
+#   openai    OpenAI 호환 — Ollama · vLLM · LM Studio · OpenRouter
+#   어느 쪽이든 어댑터가 하는 일(작업 디렉터리·산출물 수집·미러링)은 같다.
+BACKEND = os.getenv("AGORA_BACKEND", ENV.get("AGORA_BACKEND", "hermes")).lower()
+API_KEY = os.getenv("AGORA_API_KEY", ENV.get("AGORA_API_KEY", "")) \
+    or os.getenv("ANTHROPIC_API_KEY", ENV.get("ANTHROPIC_API_KEY", ""))
+API_BASE = os.getenv("AGORA_API_BASE", ENV.get("AGORA_API_BASE", ""))
+MAX_TOKENS = int(ENV.get("AGORA_MAX_TOKENS", os.getenv("AGORA_MAX_TOKENS", "16000")))
 
 # 산출물 하나가 이보다 크면 잘라서 보낸다 (교실 네트워크 보호)
 MAX_ARTIFACT_BYTES = 256 * 1024
@@ -207,6 +221,121 @@ def build_prompt(spec: str, params: dict, ctx: dict[str, str], outdir: Path) -> 
     return "\n".join(parts)
 
 
+# ── 파일 출력 규약 ────────────────────────────────────────────────────
+#   API 백엔드는 파일을 직접 쓸 수 없다. 모델이 이 형식으로 내면 어댑터가 저장한다.
+FILE_BLOCK = re.compile(
+    r"===\s*FILE:\s*(?P<name>[^\n=]+?)\s*===\r?\n(?P<body>.*?)(?:\r?\n)?===\s*END\s*===",
+    re.S)
+
+
+def file_protocol(outputs: list) -> str:
+    want = "\n".join(f"  - {o}" for o in outputs) or "  - (지시문에 적힌 파일)"
+    return (
+        "## 출력 형식 — 반드시 지켜라\n\n"
+        "만들 파일:\n" + want + "\n\n"
+        "각 파일을 아래 형식으로 하나씩 내라. 설명은 파일 밖에 짧게만.\n\n"
+        "=== FILE: 파일이름 ===\n(파일 내용 전체)\n=== END ===\n\n"
+        "⚠️ 파일 내용 안에 ``` 코드펜스를 쓰지 마라.\n"
+        "⚠️ 위 파일을 전부 내라. 하나라도 빠지면 다음 단계가 막힌다."
+    )
+
+
+def _http_json(url: str, payload: dict, headers: dict, timeout: int) -> dict:
+    """표준 라이브러리만으로 JSON POST. 노드에 추가 설치를 요구하지 않는다."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data, method="POST",
+                                 headers={"Content-Type": "application/json", **headers})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
+
+
+def run_api(workdir: Path, prompt: str, timeout: int,
+            outputs: list) -> tuple[bool, str]:
+    """모델 API 를 직접 부르고, 답변에서 파일을 뽑아 작업 디렉터리에 쓴다.
+
+    Hermes 는 스스로 파일을 만들지만 API 는 글만 돌려준다.
+    그래서 출력 규약(=== FILE: … ===)을 붙이고 여기서 저장한다.
+    """
+    out = workdir / "output"
+    out.mkdir(parents=True, exist_ok=True)
+    full = file_protocol(outputs) + "\n\n" + prompt
+
+    try:
+        if BACKEND == "anthropic":
+            if not API_KEY:
+                return False, "ANTHROPIC_API_KEY(또는 AGORA_API_KEY)가 없다"
+            body = _http_json(
+                (API_BASE or "https://api.anthropic.com") + "/v1/messages",
+                {"model": MODEL, "max_tokens": MAX_TOKENS,
+                 "messages": [{"role": "user", "content": full}]},
+                {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"},
+                timeout)
+            if body.get("stop_reason") == "refusal":
+                return False, "모델이 응답을 거절했다 (stop_reason=refusal)"
+            text = "".join(b.get("text", "") for b in body.get("content", [])
+                           if b.get("type") == "text")
+        else:                                   # openai 호환 (Ollama·vLLM·LM Studio)
+            base = (API_BASE or "http://127.0.0.1:11434/v1").rstrip("/")
+            body = _http_json(
+                base + "/chat/completions",
+                {"model": MODEL, "max_tokens": MAX_TOKENS,
+                 "messages": [{"role": "user", "content": full}]},
+                {"Authorization": f"Bearer {API_KEY or 'not-needed'}"},
+                timeout)
+            text = (body["choices"][0]["message"].get("content") or "")
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:300]
+        return False, f"{BACKEND} HTTP {e.code}: {detail}"
+    except Exception as e:                                      # noqa: BLE001
+        return False, f"{BACKEND} 호출 실패: {type(e).__name__}: {e}"
+
+    files = {}
+    for m in FILE_BLOCK.finditer(text):
+        name = m.group("name").strip().strip("`").lstrip("/")
+        if name and ".." not in name:
+            files[name] = m.group("body")
+    if not files:
+        # 억지로 통짜 저장하지 않는다. 엉뚱한 내용이 index.html 이 되면 원인을 못 찾는다.
+        return False, ("모델이 파일 형식(=== FILE: … ===)을 지키지 않았다 "
+                       f"({len(text)}자 응답)\n---\n" + text[:1500])
+
+    for name, bodytext in files.items():
+        fp = out / name
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(bodytext, encoding="utf-8")
+    return True, f"{BACKEND}:{MODEL} — 파일 {len(files)}건 저장: {', '.join(files)}"
+
+
+def run_claude_cli(workdir: Path, prompt: str, timeout: int) -> tuple[bool, str]:
+    """Claude Code CLI 를 작업 디렉터리 안에서 한 번 돌린다.
+
+    Hermes 와 같은 자리에 들어간다 — **CLI 가 파일을 직접 쓴다.**
+    그래서 `=== FILE: … ===` 출력 규약이 필요 없다 (그건 API 백엔드용이다).
+
+    준비:
+        npm i -g @anthropic-ai/claude-code   (또는 배포판 설치)
+        claude auth login                    (또는 ANTHROPIC_API_KEY)
+        .env 에  AGORA_BACKEND=claude
+    """
+    env = dict(os.environ)
+    env["HOME"] = str(HOME)
+    env["PATH"] = f"{HOME}/.local/bin:/usr/local/bin:" + env.get("PATH", "")
+    cmd = [CLAUDE_BIN, "-p", prompt, "--dangerously-skip-permissions"]
+    if MODEL and MODEL != "gpt-oss:120b":      # 노드 기본값이면 CLI 기본 모델을 쓴다
+        cmd += ["--model", MODEL]
+    try:
+        r = subprocess.run(cmd, cwd=str(workdir), env=env,
+                           capture_output=True, text=True, timeout=timeout)
+        out = (r.stdout or "") + (r.stderr or "")
+        return r.returncode == 0, out[-8000:]
+    except subprocess.TimeoutExpired:
+        return False, f"claude CLI 시간 초과 ({timeout}초)"
+    except FileNotFoundError:
+        return False, (f"claude 를 찾을 수 없다: {CLAUDE_BIN}\n"
+                       "npm i -g @anthropic-ai/claude-code 로 설치하고 "
+                       "AGORA_CLAUDE_BIN 으로 경로를 지정할 수 있다")
+
+
 def run_hermes(workdir: Path, prompt: str, timeout: int) -> tuple[bool, str]:
     """작업 디렉터리를 제한한 상태로 Hermes 를 돌린다 (BRIEF §5.5-3)."""
     env = dict(os.environ)
@@ -305,11 +434,16 @@ def work(task_id: str, params: dict) -> None:
         prompt = build_prompt(spec, params, ctx, outdir)
         (workdir / "prompt.txt").write_text(prompt, encoding="utf-8")
 
-        mirror("hq", "response", f"{step} 착수 — 모델 {MODEL}", cyc)
+        mirror("hq", "response", f"{step} 착수 — {BACKEND}:{MODEL}", cyc)
 
-        # 3. Hermes 실행
-        okrun, log = run_hermes(workdir, prompt, timeout)
-        (workdir / "hermes.log").write_text(log, encoding="utf-8")
+        # 3. 실행 — 어느 백엔드든 결과는 output/ 아래 파일이다
+        if BACKEND == "hermes":
+            okrun, log = run_hermes(workdir, prompt, timeout)
+        elif BACKEND == "claude":
+            okrun, log = run_claude_cli(workdir, prompt, timeout)
+        else:
+            okrun, log = run_api(workdir, prompt, timeout, list(params.get("outputs") or []))
+        (workdir / "run.log").write_text(log, encoding="utf-8")
 
         # 4. 산출물 수집
         arts = collect(outdir)
@@ -319,8 +453,8 @@ def work(task_id: str, params: dict) -> None:
         if not any(a["name"] == "report.md" for a in arts) and not report.exists():
             report.write_text(
                 f"# {step} 완료 보고\n\n- 역할: {ROLE} ({DISPLAY})\n"
-                f"- 모델: {MODEL}\n- 산출물 {len(arts)}건\n"
-                f"- Hermes 종료: {'정상' if okrun else '오류'}\n",
+                f"- 모델: {BACKEND}:{MODEL}\n- 산출물 {len(arts)}건\n"
+                f"- 실행 결과: {'정상' if okrun else '오류'}\n",
                 encoding="utf-8")
 
         if not arts and not okrun:
@@ -356,7 +490,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/.well-known/agent-card.json"):
             self._send(agent_card(self.headers.get("Host", "localhost")))
         elif self.path.startswith("/health"):
-            self._send({"ok": True, "role": ROLE, "node": NODE_ID, "model": MODEL})
+            self._send({"ok": True, "role": ROLE, "node": NODE_ID,
+                       "model": MODEL, "backend": BACKEND})
         else:
             self._send({"error": "not found"}, 404)
 
@@ -468,7 +603,8 @@ def main() -> None:
     a = ap.parse_args()
 
     WORKROOT.mkdir(parents=True, exist_ok=True)
-    print(f"[adapter] role={ROLE} node={NODE_ID} hq={HQ} model={MODEL}", flush=True)
+    print(f"[adapter] role={ROLE} node={NODE_ID} hq={HQ} "
+          f"backend={BACKEND} model={MODEL}", flush=True)
 
     threading.Thread(
         target=lambda: (time.sleep(1), fetch_token(), register(a.port)),

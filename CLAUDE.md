@@ -25,9 +25,97 @@ git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
 | `repo/agora.db` | 첫 기동 때 자동 생성 |
 | `repo/project-001/` `repo/runs/` | 첫 사이클을 돌리면 생긴다 |
 | `.venv/` | `bootstrap.sh` 가 만든다 |
+| **`provisioning/students.local.yaml`** | **실제 노드 IP. 아래 ⚠️ 를 반드시 읽어라** |
 
 **`repo/showcase/` 는 따라온다.** 지난 결과물 3벌(로컬 개선 전/후 · Claude 레퍼런스)이
 들어 있어 클론 직후에도 `/projects.html` 에서 바로 볼 수 있다.
+
+## 어떻게 돌릴지 — 세 가지 (DGX 가 없어도 된다)
+
+`.env` 의 `EXECUTOR` 하나로 갈아끼운다. **셋 다 상태기계·화면·검사·산출물 경로가 같다.**
+
+| | 무엇이 필요한가 | 무엇을 얻나 | 한 사이클 |
+|---|---|---|---|
+| **`sim`** (기본) | 아무것도 | 흐름·화면·개입·게이트를 전부 확인. **산출물은 가짜** | 30초 |
+| **`llm`** | 모델 API 키 또는 로컬 Ollama | **진짜 결과물.** DGX 없이 노트북 한 대로 | 수 분 |
+| `a2a` | **PC 11대** (DGX 아니어도 된다) | 학생 11명이 각자 PC 를 조종하는 수업 구성 | 25~40분 |
+
+`a2a` 의 노드는 **무엇으로든 일할 수 있다** — `AGORA_BACKEND` 로 고른다:
+`claude`(Claude Code CLI) · `anthropic`(API) · `openai`(Ollama·vLLM 등) · `hermes`(DGX 기본).
+구성 전 과정은 [`docs/DISTRIBUTED-SETUP.md`](docs/DISTRIBUTED-SETUP.md).
+
+### `sim` — 클론하고 바로 (bootstrap 기본값)
+
+```bash
+./ops/bootstrap.sh && ./ops/dev.sh start
+```
+
+주문 접수 → S3 학생 게이트 → 11/11 자동 재개 → 완주까지 30초 만에 돈다.
+**구조를 보여주거나 화면을 고칠 때는 이게 제일 낫다.** 노드를 기다릴 이유가 없다.
+단, 산출물은 흉내이므로 결과물 품질을 보려면 아래 `llm` 을 쓴다.
+
+### `llm` — DGX 없이 진짜 결과물 뽑기
+
+```bash
+# Claude
+.venv/bin/pip install anthropic
+cat >> .env <<'ENV'
+EXECUTOR=llm
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-5
+ENV
+export ANTHROPIC_API_KEY=sk-ant-...        # 또는 `ant auth login`
+
+# 또는 OpenAI 호환 (로컬 Ollama · vLLM · LM Studio · OpenRouter)
+cat >> .env <<'ENV'
+EXECUTOR=llm
+LLM_PROVIDER=openai
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_MODEL=gpt-oss:120b
+ENV
+
+./ops/dev.sh restart
+```
+
+노드를 거치지 않고 모델을 직접 부른다. **지시문 조립·참고자료 전달·완료조건 검사·
+자가 재작업은 `a2a` 와 완전히 같다** — 다른 것은 "누가 실행하느냐" 뿐이다
+(`runner._execute_llm`). 그래서 모델을 바꿔 가며 결과를 비교할 수 있다.
+
+비교 기준선은 이미 있다 — `repo/showcase/claude-reference/`
+(Claude Code 가 11개 역할을 직접 수행한 것, `docs/RESULT.md` 에 채점표).
+
+## ⚠️ DGX 노드로 돌릴 때만 — 여기서 한 번 데였다
+
+공개 리포의 `provisioning/students.yaml` 은 **IP 가 예시 값(`10.0.0.x`)** 이다.
+그리고 HQ 는 **부팅할 때마다 이 파일로 노드 주소를 덮어쓴다** (`main._seed_nodes`).
+그대로 두고 `EXECUTOR=a2a` 로 바꾸면 HQ 가 `http://10.0.0.56:41241/` 로 노드를 부른다.
+
+증상이 고약하다 — **화면에는 노드 11대가 전부 `up` 으로 뜬다.**
+하트비트는 노드가 HQ 로 밀어 넣는 것이라 HQ 가 노드를 못 불러도 살아 있어 보인다.
+실제로는 단계마다 `ConnectTimeout` 으로 죽는다. 노드 문제로 착각하기 딱 좋다.
+
+```bash
+# 실제 IP 를 여기에 둔다. .gitignore 에 있어 커밋되지 않는다.
+sed 's/10\.0\.0\./<진짜대역>./g' provisioning/students.yaml \
+  > provisioning/students.local.yaml
+
+# .env
+EXECUTOR=a2a
+
+./ops/dev.sh restart
+```
+
+제대로 됐는지는 **부팅 로그 한 줄**과 **인수 한 항목**으로 확인한다.
+
+```bash
+grep 'nodes\]' repo/hq.log       # [nodes] students.local.yaml 로 노드를 등록한다
+./ops/acceptance.sh --phase 2    # ✅ 에이전트 카드 11/11 조회 성공 (인수 #6)
+```
+
+카드가 `0/11` 이면 HQ 가 노드를 못 부르는 것이다. 하트비트가 `up` 이어도 소용없다.
+
+`ops-node/nodes.tsv` 도 같은 이유로 예시 값이다 — 운영 스크립트를 쓰려면
+그쪽도 바꿔야 한다 ([`ops-node/SECURITY-NOTE.md`](ops-node/SECURITY-NOTE.md)).
 
 ## 먼저 읽을 것
 
@@ -36,6 +124,7 @@ git clone https://github.com/mimonimo/Web_agency.git agora && cd agora
 | [`README.md`](README.md) | 30초 요약 · 설계 결정 3가지 · 결과 |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 구조 · 상태기계 · 지시 조립 순서 · 고장 대비 |
 | [`FLOW.md`](FLOW.md) | 수업 흐름 · 사람이 개입하는 5지점 |
+| [`docs/DISTRIBUTED-SETUP.md`](docs/DISTRIBUTED-SETUP.md) | **PC 11대 구성** — DGX 없이, Claude 붙이기 |
 | [`docs/KNOWN-ISSUES.md`](docs/KNOWN-ISSUES.md) | **실제로 나온 결함 14건** + 아직 못 막은 것 |
 | [`agents/`](agents/) | 11개 역할 기준선 지시문 (사람이 쓴다) |
 | [`core/app/roles.yaml`](core/app/roles.yaml) | 역할 목표·완료조건 (코드 아님, 데이터) |
