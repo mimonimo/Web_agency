@@ -25,6 +25,7 @@ from . import a2a_server, services
 from .db import Base, SessionLocal, engine
 from .models import Cycle
 from .routers import (
+    activity,
     agents,
     artifacts,
     cycles,
@@ -114,7 +115,7 @@ app = FastAPI(
 
 # BRIEF §7 의 라우터 + 사람이 조작하는 화면용 라우터(agents·review)
 for r in (cycles, nodes, specs, tickets, orders, messages, artifacts,
-          dashboard, agents, review):
+          dashboard, agents, review, activity):
     app.include_router(r.router)
 
 # HQ 자신도 A2A 에이전트로 노출 (선택 — BRIEF §2)

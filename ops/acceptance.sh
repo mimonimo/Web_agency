@@ -184,6 +184,12 @@ phase3() {
     ng "게이트 판정 파서 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-verdict.log
   fi
 
+  if "$PY_BIN" core/tests/test_roles.py >/tmp/agora-roles.log 2>&1; then
+    ok "역할 카탈로그·기준선·검사기 $(grep -c '✅' /tmp/agora-roles.log)건 통과"
+  else
+    ng "역할 카탈로그·기준선·검사기 실패"; sed -n 's/^  ❌/    /p' /tmp/agora-roles.log
+  fi
+
   if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then
     ng "HQ 가 떠 있지 않다 (make dev 로 먼저 띄워라)"; return
   fi
@@ -400,17 +406,84 @@ phase5() {
   fi
 }
 
+phase6() {
+  head_ "Phase 6 — 사람이 조종하는 화면 (개입·프리뷰·콘솔)"
+  if ! curl -sf -m 5 "$HQ/api/health" >/dev/null 2>&1; then
+    ng "HQ 가 떠 있지 않다"; return
+  fi
+
+  for p in index.html console.html review.html projects.html agent.html \
+           edit.html board.html files.html order.html assets/ui.js; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$HQ/$p")
+    [ "$code" = "200" ] && ok "화면 $p" || ng "화면 $p ($code)"
+  done
+
+  for u in "/api/activity" "/api/activity/prompt?role=designer" \
+           "/api/review/current" "/api/review/projects" \
+           "/api/agents" "/api/agents/designer/catalog" \
+           "/api/agents/designer/notes" "/api/agents/designer/check" \
+           "/api/specs/designer/baseline"; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$HQ$u")
+    [ "$code" = "200" ] && ok "API $u" || ng "API $u ($code)"
+  done
+
+  # ★ 사람이 넣은 지시가 실제로 프롬프트에 들어가는가 — 이 기능의 존재 이유
+  curl -sf -X POST "$HQ/api/agents/designer/notes" \
+       -H 'Content-Type: application/json' \
+       -d '{"text":"인수테스트-지시-확인용"}' >/dev/null 2>&1
+  if curl -sf "$HQ/api/activity/prompt?role=designer" | grep -q "인수테스트-지시-확인용"; then
+    ok "★ 사람이 넣은 지시가 에이전트 프롬프트에 실린다"
+  else
+    ng "사람이 넣은 지시가 프롬프트에 안 들어간다"
+  fi
+  curl -sf -X DELETE "$HQ/api/agents/designer/notes" >/dev/null 2>&1
+
+  # 프롬프트에 역할 목표·완료조건이 실리는가
+  if curl -sf "$HQ/api/activity/prompt?role=frontend" | grep -q "완료 조건"; then
+    ok "역할 완료 조건이 프롬프트에 실린다"
+  else
+    ng "역할 완료 조건이 프롬프트에 없다"
+  fi
+
+  # 티켓 조작 왕복
+  cid=$(curl -sf "$HQ/api/dashboard" | "$PY_BIN" -c "
+import json,sys
+d=json.load(sys.stdin)['data'].get('cycle') or {}
+print(d.get('id',''))" 2>/dev/null)
+  if [ -n "$cid" ]; then
+    tid=$(curl -sf -X POST "$HQ/api/tickets" -H 'Content-Type: application/json' \
+      -d "{\"cycle_id\":$cid,\"from_role\":\"pm\",\"to_role\":\"qa\",\"title\":\"인수테스트 티켓\"}" \
+      | "$PY_BIN" -c "import json,sys;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
+    if [ -n "$tid" ]; then
+      curl -sf -X PATCH "$HQ/api/tickets/$tid" -H 'Content-Type: application/json' \
+           -d '{"to_role":"frontend"}' >/dev/null && ok "티켓 담당 변경" || ng "티켓 담당 변경 실패"
+      curl -sf -X POST "$HQ/api/tickets/$tid/transition" -H 'Content-Type: application/json' \
+           -d '{"status":"doing"}' >/dev/null && ok "티켓 상태 변경" || ng "티켓 상태 변경 실패"
+      curl -sf -X DELETE "$HQ/api/tickets/$tid" >/dev/null && ok "티켓 삭제" || ng "티켓 삭제 실패"
+    else
+      ng "티켓 생성 실패"
+    fi
+  fi
+
+  # 작업물이 사이클별로 묶여 나오는가
+  n=$(curl -sf "$HQ/api/review/projects" | "$PY_BIN" -c "
+import json,sys; print(len(json.load(sys.stdin)['data']))" 2>/dev/null)
+  [ -n "$n" ] && ok "작업물이 $n 묶음으로 정리된다" || ng "작업물 목록 실패"
+}
+
 case "$PHASE" in
   0)   phase0 ;;
   2)   phase2 ;;
   3)   phase3 ;;
   4)   phase4 ;;
   5)   phase5 ;;
+  6)   phase6 ;;
   all) phase0
        phase3        # 먼저 사이클을 돌려야 메시지·산출물이 생긴다
        phase2
        phase4
-       phase5 ;;
+       phase5
+       phase6 ;;
   *)   echo "아직 없는 Phase: $PHASE" >&2; exit 2 ;;
 esac
 

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실시간 콘솔 — AGORA Web</title>
+<link rel="stylesheet" href="/assets/office.css">
+<style>
+  .wrap{flex:1;display:grid;grid-template-rows:auto 1fr;gap:.8rem;padding:1rem;min-height:0}
+
+  /* 지금 도는 단계 — 크게, 경과 시간과 함께 */
+  .now{display:flex;gap:.7rem;flex-wrap:wrap;align-items:stretch}
+  .nowcard{
+    flex:1 1 18rem;background:var(--panel);border:1.5px solid var(--line);
+    border-left:5px solid var(--run);border-radius:10px;padding:.75rem .9rem}
+  .nowcard.idle{border-left-color:var(--idle);opacity:.75}
+  .nowcard .k{font-family:ui-monospace,monospace;font-weight:800;font-size:1.1rem}
+  .nowcard .r{color:var(--dim);font-size:.92rem;margin-top:.15rem}
+  .nowcard .t{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .nowcard .bar{height:6px;background:#0f131b;border-radius:99px;margin-top:.45rem;overflow:hidden}
+  .nowcard .bar i{display:block;height:100%;background:var(--run);width:0;transition:width .6s}
+  .nowcard .bar i.warn{background:var(--wait)}
+
+  .cols{display:grid;grid-template-columns:1fr minmax(19rem,26rem);gap:.8rem;min-height:0}
+  @media (max-width:1000px){ .cols{grid-template-columns:1fr} }
+
+  /* 터미널 */
+  .term{background:#080b11;border:1.5px solid var(--line);border-radius:10px;
+        display:flex;flex-direction:column;min-height:0}
+  .termbar{display:flex;gap:.4rem;align-items:center;padding:.5rem .7rem;
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .feed{flex:1;overflow-y:auto;padding:.6rem .8rem;
+    font-family:ui-monospace,"D2Coding",monospace;font-size:.93rem;line-height:1.7}
+  .ln{display:grid;grid-template-columns:5.2rem 9.5rem 1fr;gap:.6rem;
+      padding:.1rem 0;border-bottom:1px solid #10151f}
+  .ln .tm{color:#5f6b82}
+  .ln .ac{color:#93c5fd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ln .tx{color:#dce3f0;word-break:break-word}
+  .ln .tx b{color:#fff}
+  .ln.req .ac{color:#fbbf24}
+  .ln.res .ac{color:#4ade80}
+  .ln.audit .ac{color:#c084fc}
+  .ln.bad .tx{color:#fca5a5}
+  .ln .dt{color:#8b98ad}
+  .cursorline{color:#4ade80;padding-top:.3rem}
+  .cursorline i{display:inline-block;width:.55rem;height:1.05rem;background:#4ade80;
+    vertical-align:-2px;animation:bl 1s steps(2) infinite}
+  @keyframes bl{50%{opacity:0}}
+
+  /* 오른쪽 */
+  .side{display:flex;flex-direction:column;gap:.8rem;min-height:0;overflow-y:auto}
+  .agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.4rem,1fr));gap:.4rem}
+  .ag{background:#121824;border:1.5px solid var(--line);border-radius:9px;
+      padding:.45rem .55rem;font-size:.88rem;cursor:pointer}
+  .ag:hover{border-color:#48587a}
+  .ag.work{border-color:var(--run);background:#152036}
+  .ag .nm{font-weight:700}
+  .ag .st{color:var(--dim);font-size:.82rem}
+  .ag.work .st{color:#93c5fd}
+  pre.prompt{margin:0;white-space:pre-wrap;font-size:.86rem;line-height:1.6;
+    max-height:26rem;overflow:auto;background:#0f131b;border:1px solid var(--line);
+    border-radius:8px;padding:.7rem;font-family:ui-monospace,"D2Coding",monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="now" id="now"></div>
+
+  <div class="cols">
+    <div class="term">
+      <div class="termbar">
+        <b style="font-family:ui-monospace,monospace">agora@hq</b>
+        <span class="muted" id="cstat">연결 중…</span>
+        <span class="act" style="margin-left:auto;display:flex;gap:.4rem;align-items:center">
+          <label class="muted"><input type="checkbox" id="follow" checked> 자동 스크롤</label>
+          <button class="btn sm" id="clear">지우기</button>
+        </span>
+      </div>
+      <div class="feed" id="feed"></div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h3>👥 에이전트 11명 <span class="act muted">누르면 받은 지시를 봅니다</span></h3>
+        <div class="agents" id="agents"></div>
+      </div>
+      <div class="card">
+        <h3>📜 <span id="ptitle">받은 지시문</span>
+          <span class="act"><button class="btn sm" id="pclose">닫기</button></span></h3>
+        <div class="muted" id="pmeta" style="margin-bottom:.4rem"></div>
+        <pre class="prompt" id="prompt">에이전트를 누르면 그가 실제로 받은 지시문이 여기 나옵니다.
+
+"무슨 일을 시켰길래 저런 결과가 나왔나" 를 눈으로 봐야
+지시문을 고칠 마음이 생깁니다. 그게 이 수업의 목적입니다.</pre>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="/assets/ui.js"></script>
+<script>
+let cursor = { msg: 0, log: 0 }, roles = {}, running = [], tick = null, lastErr = 0;
+
+nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/review.html">👀 보고 고치기</a>');
+
+const pad = (n) => String(n).padStart(2, "0");
+const hhmmss = (iso) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const mmss = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+
+function line(e) {
+  const who = e.to ? `${e.from} → ${e.to}` : e.from;
+  const cls = e.kind === "request" ? "req" : e.kind === "response" ? "res"
+            : e.kind === "audit" ? "audit" : "";
+  const bad = /미달|반려|실패|오류|시간 초과/.test(e.text + e.detail) ? " bad" : "";
+  return `<div class="ln ${cls}${bad}">
+    <span class="tm">${e.ts ? hhmmss(e.ts) : ""}</span>
+    <span class="ac" title="${esc(who)}">${esc(who)}</span>
+    <span class="tx">${esc(e.text)}${e.detail ? ` <span class="dt">${esc(e.detail)}</span>` : ""}</span>
+  </div>`;
+}
+
+function drawNow() {
+  if (!running.length) {
+    $("now").innerHTML = `<div class="nowcard idle">
+      <div class="k">대기 중</div>
+      <div class="r">지금 도는 단계가 없습니다. 주문을 넣거나 사이클을 재개하세요.</div></div>`;
+    return;
+  }
+  $("now").innerHTML = running.map(s => {
+    const e = s.elapsed ?? 0, to = s.timeout || 0;
+    const pct = to ? Math.min(100, Math.round(e / to * 100)) : 0;
+    return `<div class="nowcard">
+      <div style="display:flex;align-items:baseline;gap:.6rem">
+        <span class="k">${esc(s.key)}</span>
+        <span>${esc(s.name)}</span>
+        <span class="t" style="margin-left:auto" data-el="${e}">${mmss(e)}</span>
+      </div>
+      <div class="r">${s.roles.map(r => esc(roles[r] || r)).join(" · ")}
+        ${s.attempt > 1 ? ` · ${s.attempt}번째 시도` : ""}
+        ${to ? ` · 제한 ${Math.round(to / 60)}분` : ""}</div>
+      <div class="bar"><i class="${pct > 75 ? "warn" : ""}" style="width:${pct}%"></i></div>
+    </div>`;
+  }).join("");
+}
+
+function drawAgents() {
+  const busy = {};
+  running.forEach(s => s.roles.forEach(r => busy[r] = s.key));
+  $("agents").innerHTML = Object.entries(roles).map(([r, ko]) =>
+    `<div class="ag ${busy[r] ? "work" : ""}" data-r="${r}">
+       <div class="nm">${esc(ko)}</div>
+       <div class="st">${busy[r] ? "작업 중 " + esc(busy[r]) : "대기"}</div>
+     </div>`).join("");
+  $("agents").querySelectorAll(".ag").forEach(a =>
+    a.onclick = () => showPrompt(a.dataset.r));
+}
+
+async function showPrompt(role) {
+  $("ptitle").textContent = `${roles[role] || role} 가 받은 지시문`;
+  $("prompt").textContent = "불러오는 중…";
+  try {
+    const d = await api(`/api/activity/prompt?role=${role}`);
+    $("pmeta").innerHTML = d.step
+      ? `<b>${esc(d.step)}</b> ${esc(d.step_name || "")} · 작업 <code>${esc(d.task)}</code>
+         · 참고자료 ${(d.inputs || []).length}건 · 산출 ${(d.outputs || []).join(", ") || "-"}`
+      : esc(d.note || "");
+    $("prompt").textContent =
+      (d.order ? `[주문서]\n${d.order}\n\n${"─".repeat(40)}\n\n` : "") +
+      (d.instruction || "(지시문 없음)");
+  } catch (e) { $("prompt").textContent = e.message; }
+}
+$("pclose").onclick = () => { $("prompt").textContent = "에이전트를 누르면 그가 받은 지시문이 나옵니다."; $("pmeta").textContent = ""; };
+
+async function poll() {
+  try {
+    const d = await api(`/api/activity?after_msg=${cursor.msg}&after_log=${cursor.log}&limit=120`);
+    roles = d.roles || roles;
+    running = d.running || [];
+    const first = cursor.msg === 0 && cursor.log === 0;
+    cursor = d.cursor;
+    $("cstat").innerHTML = d.cycle
+      ? `사이클 <b>#${d.cycle.id}</b> · <span class="badge ${d.cycle.status}" style="font-size:.78rem;padding:.05rem .5rem">${d.cycle.status}</span>`
+      : `사이클 없음`;
+    cycleBadge($("cyc"));
+
+    if (d.events.length) {
+      const box = $("feed");
+      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 60;
+      box.insertAdjacentHTML("beforeend", d.events.map(line).join(""));
+      const cl = box.querySelector(".cursorline"); if (cl) box.appendChild(cl);
+      while (box.children.length > 600) box.removeChild(box.firstChild);
+      if ($("follow").checked && (atBottom || first)) box.scrollTop = box.scrollHeight;
+    }
+    drawNow(); drawAgents();
+    lastErr = 0;
+  } catch (e) {
+    if (!lastErr++) $("cstat").innerHTML = `<span class="bad-mark">연결 실패 — 재시도 중</span>`;
+  }
+}
+
+$("clear").onclick = () => { $("feed").innerHTML = ""; addCursor(); };
+function addCursor() {
+  $("feed").insertAdjacentHTML("beforeend", `<div class="cursorline">agora@hq:~$ <i></i></div>`);
+}
+
+// 초 단위로 경과 시간만 올려 준다 (서버를 다시 부르지 않는다)
+setInterval(() => {
+  document.querySelectorAll("[data-el]").forEach(el => {
+    const v = +el.dataset.el + 1; el.dataset.el = v; el.textContent = mmss(v);
+  });
+}, 1000);
+
+addCursor();
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

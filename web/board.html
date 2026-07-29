@@ -3,125 +3,205 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>티켓 보드 · 타임라인 — AGORA Web</title>
+<title>티켓 보드 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .wrap{max-width:1400px;margin:1.2rem auto;padding:0 1.2rem}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
-  .col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.9rem}
-  .col h3{margin:0 0 .8rem;font-size:1rem;display:flex;align-items:center;gap:.5rem}
-  .col h3 .n{background:var(--panel2);border-radius:999px;padding:.1rem .6rem;
-             font-size:.9rem;color:var(--dim)}
-  .col.todo h3{color:var(--wait)} .col.doing h3{color:var(--run)}
-  .col.done h3{color:var(--ok)}   .col.rejected h3{color:var(--bad)}
-  .card{background:#121824;border:1px solid var(--line);border-radius:8px;
-        padding:.7rem .8rem;margin-bottom:.6rem;line-height:1.5}
-  .card .t{font-weight:700;font-size:.98rem;margin-bottom:.3rem}
-  .card .who{font-size:.85rem;color:var(--dim);font-family:ui-monospace,monospace}
-  .card .why{font-size:.9rem;color:#fca5a5;margin-top:.35rem}
-  .card .dod{font-size:.9rem;color:var(--dim);margin-top:.35rem}
-  .empty{color:var(--dim);font-size:.92rem;padding:.5rem .2rem}
+  .wrap{flex:1;display:flex;flex-direction:column;gap:1rem;padding:1rem;min-height:0}
+  .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;min-height:0}
+  @media (max-width:1100px){ .cols{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:640px){ .cols{grid-template-columns:1fr} }
 
-  .sect{margin-top:1.6rem}
-  .sect h2{font-size:1.1rem;margin:0 0 .7rem;display:flex;align-items:center;gap:.6rem}
-  .steps{display:flex;flex-direction:column;gap:.45rem}
-  .srow{display:grid;grid-template-columns:64px 1fr auto;gap:.8rem;align-items:center;
-        background:var(--panel);border:1px solid var(--line);border-left-width:4px;
-        border-radius:8px;padding:.6rem .9rem}
-  .srow .k{font-family:ui-monospace,monospace;font-weight:800;font-size:1rem}
-  .srow .nm{font-size:.98rem}
-  .srow .role{font-size:.85rem;color:var(--dim);font-family:ui-monospace,monospace}
-  .srow .st{font-size:.88rem;font-weight:700;padding:.2rem .7rem;border-radius:999px;
-            background:var(--panel2);color:var(--dim);white-space:nowrap}
-  .srow.DONE{border-left-color:var(--ok)}    .srow.DONE .st{background:#153d22;color:#86efac}
-  .srow.RUNNING{border-left-color:var(--run)} .srow.RUNNING .st{background:#1b2740;color:#93c5fd}
-  .srow.WAITING_HUMAN{border-left-color:var(--wait)} .srow.WAITING_HUMAN .st{background:#4d3a10;color:#fcd34d}
-  .srow.FAILED{border-left-color:var(--bad)} .srow.FAILED .st{background:#341a1a;color:#fecaca}
-  .srow .err{grid-column:1/-1;font-size:.9rem;color:#fca5a5}
-  .arts{font-size:.92rem;color:var(--dim);margin-top:.6rem}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+       padding:.7rem;display:flex;flex-direction:column;min-height:12rem}
+  .col h3{margin:0 0 .6rem;font-size:.98rem;color:var(--dim);font-weight:750;
+    display:flex;align-items:center;gap:.5rem}
+  .col h3 .n{margin-left:auto;background:var(--panel2);border-radius:999px;
+    padding:0 .55rem;font-size:.85rem}
+  .col .body{flex:1;display:flex;flex-direction:column;gap:.5rem;overflow-y:auto}
+
+  .tk{background:#121824;border:1.5px solid var(--line);border-left-width:4px;
+      border-radius:9px;padding:.6rem .7rem;font-size:.94rem;line-height:1.5}
+  .tk.todo{border-left-color:var(--wait)}
+  .tk.doing{border-left-color:var(--run)}
+  .tk.review{border-left-color:var(--gate)}
+  .tk.done{border-left-color:var(--ok)}
+  .tk .ti{font-weight:700;margin-bottom:.25rem}
+  .tk .who{color:var(--dim);font-size:.87rem}
+  .tk .dod{color:var(--dim);font-size:.88rem;margin-top:.3rem;
+    border-top:1px dashed #2b3547;padding-top:.3rem;white-space:pre-wrap}
+  .tk .ops{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.45rem}
+  .tk .ops button,.tk .ops select{
+    background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+    border-radius:7px;padding:.2rem .5rem;font:inherit;font-size:.85rem;cursor:pointer}
+  .tk .ops button:hover{background:#2c384c}
+  .tk .ops .del{border-color:#6b3030;color:#ffc9c9}
+
+  .tl{max-height:20rem;overflow-y:auto}
+  .tl table{width:100%;border-collapse:collapse;font-size:.94rem}
+  .tl td{padding:.35rem .4rem;border-bottom:1px solid #232b3a}
+  .gate{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+  .newrow{display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:.5rem}
+  @media (max-width:900px){ .newrow{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
-<header class="bar">
-  <div class="brand">AGORA<span>Web</span></div>
-  <div class="cycleinfo">
-    <span id="c-title">-</span>
-    <span id="c-status" class="badge">-</span>
-    <a class="link" href="/index.html" style="margin-left:.8rem">픽셀 오피스 →</a>
-  </div>
-</header>
-
 <div class="wrap">
-  <!-- 개인 가동률 지표는 띄우지 않는다 (BRIEF §8.4).
-       "3번 책상이 논다" 가 아니라 "B사가 설계 단계에서 멈춰 있다" 로 보여야
-       화살이 사람이 아니라 병목을 가리킨다. -->
-  <div class="sect">
-    <h2>티켓</h2>
-    <div class="grid" id="board"></div>
+  <div class="card">
+    <h3>🚪 게이트 조작
+      <span class="act muted">사이클이 게이트에서 멈췄을 때 사람이 결정한다</span></h3>
+    <div class="gate">
+      <select class="box" id="gstep" style="width:11rem"></select>
+      <input class="box" id="greason" placeholder="사유 (통과/반려 모두 남긴다)" style="flex:1;min-width:14rem">
+      <select class="box" id="grewind" style="width:11rem"></select>
+      <button class="btn good" id="gpass">✅ 통과</button>
+      <button class="btn danger" id="gfail">⛔ 반려 · 되감기</button>
+    </div>
+    <p class="muted" style="margin:.5rem 0 0">
+      반려하면 지정한 단계로 되감고 재작업 티켓이 자동으로 만들어집니다.
+      통과 사유를 안 적으면 나중에 왜 통과시켰는지 아무도 설명하지 못합니다.</p>
   </div>
 
-  <div class="sect">
-    <h2>타임라인 <span id="arts" class="arts"></span></h2>
-    <div class="steps" id="steps"></div>
+  <div class="card">
+    <h3>➕ 티켓 만들기</h3>
+    <div class="newrow">
+      <select class="box" id="nfrom"></select>
+      <select class="box" id="nto"></select>
+      <input class="box" id="ntitle" placeholder="무엇을 해야 하나 (제목)">
+      <button class="btn primary" id="nadd">만들기</button>
+    </div>
+    <input class="box" id="ndod" placeholder="완료 조건 — 무엇이 되면 끝인가" style="margin-top:.5rem">
+  </div>
+
+  <div class="cols" id="cols"></div>
+
+  <div class="card tl">
+    <h3>🕒 단계 타임라인</h3>
+    <table><tbody id="tl"></tbody></table>
   </div>
 </div>
 
+<script src="/assets/ui.js"></script>
 <script>
-const COLS = [["todo","할 일"],["doing","진행"],["done","완료"],["rejected","반려"]];
-const $ = (id) => document.getElementById(id);
+const STATUSES = [["todo", "할 일"], ["doing", "진행"], ["review", "검토"], ["done", "완료"]];
+let cycle = null, roles = [];
 
-async function tick() {
-  let d;
-  try { d = (await (await fetch("/api/dashboard")).json()).data; } catch (e) { return; }
+nav('<span id="cyc" class="muted"></span> <a class="btn sm" href="/agent.html">🧑‍💻 에이전트</a>');
 
-  const c = d.cycle;
-  $("c-title").textContent = c
-    ? `사이클 #${c.id} · ${c.pipeline} · ${c.attempt_no}회차` : "사이클 없음";
-  $("c-status").textContent = c ? c.status : "-";
-  $("c-status").className = "badge " + (c ? c.status : "");
+async function boot() {
+  const d = await api("/api/dashboard");
+  cycle = d.cycle ? d.cycle.id : null;
+  cycleBadge($("cyc"));
+  const ag = await api("/api/agents");
+  roles = ag.map(a => a.role);
+  const opts = roles.map(r => `<option value="${r}">${esc(r)}</option>`).join("");
+  $("nfrom").innerHTML = opts; $("nto").innerHTML = opts;
+  $("nfrom").value = "pm"; $("nto").value = "frontend";
 
-  // ── 티켓 ──────────────────────────────────────────────
-  const list = (d.tickets && d.tickets.list) || [];
-  $("board").innerHTML = COLS.map(([k, ko]) => {
-    const items = list.filter(t => (t.status || "todo") === k);
-    const n = (d.tickets && d.tickets[k]) ?? items.length;
-    const cards = items.length ? items.map(t => `
-      <div class="card">
-        <div class="t">${esc(t.title)}</div>
-        <div class="who">${esc(t.from)} → ${esc(t.to)}</div>
-        ${t.reason ? `<div class="why">사유: ${esc(t.reason)}</div>` : ""}
-      </div>`).join("") : `<div class="empty">없음</div>`;
-    return `<div class="col ${k}"><h3>${ko}<span class="n">${n}</span></h3>${cards}</div>`;
+  const steps = (d.steps || []).map(s => s.key || s.step_key).filter(Boolean);
+  $("gstep").innerHTML = steps.map(s => `<option>${esc(s)}</option>`).join("")
+    || `<option value="">단계 없음</option>`;
+  if (d.cycle && d.cycle.current_step) $("gstep").value = d.cycle.current_step;
+  $("grewind").innerHTML = `<option value="">되감기 대상 자동</option>` +
+    steps.map(s => `<option>${esc(s)}</option>`).join("");
+
+  $("tl").innerHTML = (d.steps || []).map(s => `
+    <tr><td><b>${esc(s.key || s.step_key)}</b></td><td>${esc(s.name || "")}</td>
+      <td><span class="badge ${s.status}" style="font-size:.78rem;padding:.1rem .55rem">${s.status}</span></td>
+      <td class="muted">${esc((s.roles || []).join(", ") || s.role || "")}</td></tr>`).join("");
+
+  load();
+}
+
+async function load() {
+  const ts = await api("/api/tickets" + (cycle ? `?cycle=${cycle}` : ""));
+  $("cols").innerHTML = STATUSES.map(([k, ko]) => {
+    const mine = ts.filter(t => (t.status || "todo") === k);
+    return `<div class="col"><h3>${ko}<span class="n">${mine.length}</span></h3>
+      <div class="body">${mine.map(card).join("") || `<div class="muted">없습니다</div>`}</div></div>`;
   }).join("");
-
-  // ── 타임라인 ──────────────────────────────────────────
-  $("steps").innerHTML = (d.steps || []).map(s => {
-    const who = s.parallel && s.parallel.length ? s.parallel.join(", ") : (s.role || "-");
-    const label = { DONE:"완료", RUNNING:"진행 중", PENDING:"대기",
-                    WAITING_HUMAN:"사람 대기", FAILED:"실패",
-                    REJECTED:"반려", SKIPPED:"건너뜀" }[s.status] || s.status;
-    return `<div class="srow ${s.status}">
-      <span class="k">${s.key}</span>
-      <span><span class="nm">${esc(s.name)}</span>
-        <span class="role">· ${esc(who)}</span>
-        ${s.type ? `<span class="role">· ${s.type === "human_gate" ? "사람 게이트" : "게이트"}</span>` : ""}
-        ${s.attempt > 1 ? `<span class="role">· ${s.attempt}회차</span>` : ""}</span>
-      <span class="st">${label}</span>
-      ${s.error ? `<span class="err">${esc(s.error)}</span>` : ""}
-    </div>`;
-  }).join("") || `<div class="empty">아직 사이클이 없습니다.</div>`;
-
-  $("arts").textContent = c
-    ? `산출물 ${d.artifacts || 0}건 · AGENT.md ${d.specs.customized || 0}/${d.specs.total || 0}` : "";
+  wire(ts);
 }
 
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"]/g, m =>
-    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[m]));
+function card(t) {
+  return `<div class="tk ${t.status || "todo"}" data-id="${t.id}">
+    <div class="ti">#${t.id} ${esc(t.title)}</div>
+    <div class="who">${esc(t.from)} → <b>${esc(t.to)}</b></div>
+    ${t.dod ? `<div class="dod">${esc(t.dod)}</div>` : ""}
+    ${t.reason ? `<div class="dod">사유: ${esc(t.reason)}</div>` : ""}
+    <div class="ops">
+      ${STATUSES.filter(([k]) => k !== (t.status || "todo"))
+        .map(([k, ko]) => `<button data-mv="${t.id}" data-st="${k}">→ ${ko}</button>`).join("")}
+      <select data-as="${t.id}" title="담당 바꾸기">
+        <option value="">담당…</option>
+        ${roles.map(r => `<option value="${r}" ${r === t.to ? "selected" : ""}>${esc(r)}</option>`).join("")}
+      </select>
+      <button data-ed="${t.id}">✏️</button>
+      <button class="del" data-rm="${t.id}">🗑</button>
+    </div></div>`;
 }
 
-tick();
-setInterval(tick, 3000);
+function wire(ts) {
+  const box = $("cols");
+  box.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => act(b, () =>
+    api(`/api/tickets/${b.dataset.mv}/transition`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: b.dataset.st }) }), "옮겼습니다").then(load).catch(() => {}));
+
+  box.querySelectorAll("[data-as]").forEach(s => s.onchange = () => {
+    if (!s.value) return;
+    api(`/api/tickets/${s.dataset.as}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to_role: s.value }) })
+      .then(() => { toast("담당을 바꿨습니다", "ok"); load(); })
+      .catch(e => toast(e.message, "bad"));
+  });
+
+  box.querySelectorAll("[data-ed]").forEach(b => b.onclick = () => {
+    const t = ts.find(x => x.id == b.dataset.ed);
+    const title = prompt("제목", t.title); if (title === null) return;
+    const dod = prompt("완료 조건", t.dod || "");
+    api(`/api/tickets/${t.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, dod }) })
+      .then(() => { toast("고쳤습니다", "ok"); load(); })
+      .catch(e => toast(e.message, "bad"));
+  });
+
+  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+    if (!confirm(`티켓 #${b.dataset.rm} 을 지웁니다. 계속할까요?`)) return;
+    act(b, () => api(`/api/tickets/${b.dataset.rm}`, { method: "DELETE" }), "지웠습니다")
+      .then(load).catch(() => {});
+  });
+}
+
+$("nadd").onclick = () => {
+  const title = $("ntitle").value.trim();
+  if (!title) { toast("제목을 적어 주세요", "bad"); return; }
+  if (!cycle) { toast("사이클이 없습니다", "bad"); return; }
+  act($("nadd"), () => api("/api/tickets", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cycle_id: cycle, from_role: $("nfrom").value,
+      to_role: $("nto").value, title, dod: $("ndod").value.trim() || null }) }), "만들었습니다")
+    .then(() => { $("ntitle").value = ""; $("ndod").value = ""; load(); }).catch(() => {});
+};
+
+$("gpass").onclick = () => act($("gpass"), () =>
+  api(`/api/gates/${encodeURIComponent($("gstep").value)}/approve`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: $("greason").value, cycle_id: cycle }) }))
+  .then(boot).catch(() => {});
+
+$("gfail").onclick = () => {
+  const reason = $("greason").value.trim();
+  if (!reason) { toast("반려 사유를 적어 주세요. 그대로 재작업 티켓이 됩니다.", "bad"); return; }
+  act($("gfail"), () => api(`/api/gates/${encodeURIComponent($("gstep").value)}/reject`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason, rewind_to: $("grewind").value || null, cycle_id: cycle }) }))
+    .then(boot).catch(() => {});
+};
+
+boot();
+setInterval(() => { if (!document.querySelector("[data-busy]")) load(); }, 10000);
 </script>
 </body>
 </html>

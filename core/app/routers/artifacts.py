@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -56,15 +57,60 @@ async def file_tree(path: str = Query("", description="repo/ 기준 상대 경�
         if p.name in HIDE or p.name.startswith("."):
             continue
         rel = str(p.relative_to(REPO_ROOT))
+        st = p.stat()
         if p.is_dir():
             n = sum(1 for _ in p.rglob("*") if _.is_file())
-            items.append({"name": p.name, "path": rel, "type": "dir", "count": n})
+            items.append({"name": p.name, "path": rel, "type": "dir",
+                          "count": n, "mtime": st.st_mtime})
         else:
             items.append({"name": p.name, "path": rel, "type": "file",
-                          "size": p.stat().st_size,
-                          "editable": p.suffix.lower() in TEXT_EXT})
+                          "size": st.st_size, "mtime": st.st_mtime,
+                          "editable": p.suffix.lower() in TEXT_EXT,
+                          "viewable": p.suffix.lower() in VIEW_EXT})
     parent = str(pathlib_parent(path)) if path else None
-    return {"ok": True, "data": {"path": path, "parent": parent, "items": items}}
+    has_index = (target / "index.html").is_file()
+    return {"ok": True, "data": {
+        "path": path, "parent": parent, "items": items,
+        # 이 폴더가 웹사이트면 바로 열 수 있게 알려 준다
+        "site_url": f"/preview/{path}/index.html" if has_index and path else None,
+    }}
+
+
+VIEW_EXT = {".html", ".htm", ".css", ".js", ".json", ".svg", ".png", ".jpg",
+            ".jpeg", ".gif", ".webp", ".md", ".txt"}
+
+
+class NewFile(BaseModel):
+    path: str
+    content: str = ""
+
+
+@files_router.post("")
+async def create_file(body: NewFile, db: Session = Depends(get_db)):
+    """새 파일(또는 폴더)을 만든다.
+
+    사람이 산출물을 손으로 보태야 할 때가 있다 — 에이전트가 빠뜨린 파일,
+    수업 중에 급히 끼워 넣는 예시 데이터. 웹에서 끝낼 수 있어야 한다.
+    경로가 `/` 로 끝나면 폴더를 만든다.
+    """
+    rel = body.path.strip().lstrip("/")
+    if not rel:
+        raise HTTPException(400, "경로를 적어라")
+    target = _safe(rel)
+    if body.path.rstrip().endswith("/"):
+        target.mkdir(parents=True, exist_ok=True)
+        from .. import services
+        services.audit(db, "pm", "file.mkdir", rel, {})
+        db.commit()
+        return {"ok": True, "data": {"path": rel, "type": "dir"}}
+    if target.exists():
+        raise HTTPException(409, f"이미 있는 파일이다: {rel}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body.content, encoding="utf-8")
+    from .. import services
+    services.audit(db, "pm", "file.create", rel, {"bytes": len(body.content)})
+    db.commit()
+    return {"ok": True, "data": {"path": rel, "type": "file"}}
 
 
 def pathlib_parent(path: str) -> str:

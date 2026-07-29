@@ -31,6 +31,7 @@ demo:  ## ★ 수업 시연 시나리오 (PM 화면 띄워 놓고 실행)
 
 test:  ## 상태기계 단위 테스트 + E2E 흐름 테스트
 	@./.venv/bin/python core/tests/test_orchestrator.py
+	@./.venv/bin/python core/tests/test_roles.py
 	@./.venv/bin/python core/tests/test_flow.py
 
 env: .env  ## .env 가 없으면 .env.example 에서 만든다

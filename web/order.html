@@ -3,129 +3,164 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AGORA Web — 주문 접수</title>
+<title>주문 접수 — AGORA Web</title>
 <link rel="stylesheet" href="/assets/office.css">
 <style>
-  .form{max-width:720px;margin:2rem auto;padding:1.8rem;background:var(--panel);
-        border:1px solid var(--line);border-radius:14px}
-  .form h1{margin:0 0 .4rem;font-size:1.5rem}
-  .form .sub{color:var(--dim);font-size:1rem;margin:0 0 1.6rem;line-height:1.6}
-  .f{margin-bottom:1.15rem}
-  .f label{display:block;font-size:.95rem;font-weight:600;margin-bottom:.4rem}
-  .f label .req{color:#f87171;margin-left:.25em}
-  .f input,.f select,.f textarea{
-    width:100%;background:#0f131b;color:var(--fg);border:1.5px solid var(--line);
-    border-radius:10px;padding:.7rem .85rem;font-family:inherit;font-size:1rem}
-  .f input:focus,.f select:focus{outline:none;border-color:var(--run);
-    box-shadow:0 0 0 3px rgba(96,165,250,.18)}
-  .feat{display:flex;flex-wrap:wrap;gap:.55rem}
-  .feat label{border:1.5px solid var(--line);border-radius:10px;padding:.55rem .9rem;
-              font-size:1rem;font-weight:600;cursor:pointer;display:flex;
-              align-items:center;gap:.45rem;background:#121824;transition:background .12s}
-  .feat label:hover{background:#222c3c}
-  .feat label:has(input:checked){border-color:var(--run);background:#1b2740}
-  .feat input{width:1.15rem;height:1.15rem;accent-color:var(--run)}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+  .wrap{flex:1;display:grid;grid-template-columns:1fr minmax(19rem,25rem);
+        gap:1rem;padding:1rem;align-items:start}
+  @media (max-width:960px){ .wrap{grid-template-columns:1fr} }
+
+  .f{margin-bottom:.85rem}
+  .f label{display:block;font-weight:700;margin-bottom:.3rem;font-size:.98rem}
+  .f .why{color:var(--dim);font-weight:500;font-size:.88rem;margin-left:.4rem}
+  .req{color:var(--bad);margin-left:.2rem}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
   @media (max-width:640px){ .row{grid-template-columns:1fr} }
-  .submit{width:100%;background:var(--run);color:#0d1017;font-weight:800;border:0;
-          border-radius:12px;padding:.95rem;font-size:1.1rem;cursor:pointer;
-          font-family:inherit;margin-top:.5rem;transition:background .12s,transform .06s}
-  .submit:hover{background:#7cb4fb}
-  .submit:active{transform:translateY(1px)}
-  .result{margin-top:1.2rem;padding:1rem 1.1rem;border-radius:10px;font-size:1rem;
-          display:none;line-height:1.6;font-weight:600}
-  .result.ok{background:#153d22;color:#86efac;display:block}
-  .result.err{background:#341a1a;color:#fecaca;display:block}
+
+  .feat{display:flex;flex-wrap:wrap;gap:.45rem}
+  .feat label{
+    display:inline-flex;align-items:center;gap:.4rem;background:#121824;
+    border:1.5px solid var(--line);border-radius:999px;padding:.4rem .85rem;
+    cursor:pointer;font-weight:600;font-size:.95rem}
+  .feat label:hover{background:#1c2432}
+  .feat input{accent-color:var(--run);width:1.05rem;height:1.05rem}
+  .feat label:has(input:checked){background:#1b2740;border-color:#33507f}
+
+  .submit{width:100%;margin-top:.5rem;padding:.85rem;font-size:1.06rem}
+  .steps{counter-reset:s;margin:0;padding-left:0;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding-left:2rem;margin:.55rem 0;
+    line-height:1.55;font-size:.96rem}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:.05rem;
+    width:1.45rem;height:1.45rem;border-radius:50%;background:var(--panel2);
+    border:1.5px solid var(--line);display:grid;place-items:center;
+    font-size:.85rem;font-weight:800;color:var(--dim)}
+  .warn{background:#251c10;border:1px solid #5a4520;border-radius:9px;
+    padding:.65rem .8rem;font-size:.93rem;line-height:1.6;color:#fde68a}
+  .recent a{display:block;padding:.4rem 0;border-bottom:1px solid #232b3a;
+    color:var(--fg);text-decoration:none;font-size:.94rem}
+  .recent a:hover{color:#a5d8ff}
 </style>
 </head>
 <body>
-<header class="bar">
-  <div class="brand">AGORA<span>Web</span></div>
-  <div class="cycleinfo"><a class="link" href="/index.html">← 픽셀 오피스</a></div>
-</header>
+<div class="wrap">
+  <form id="f" class="card" autocomplete="off">
+    <h3>🧾 새 일 맡기기 <span class="act muted">신규 개발 주문</span></h3>
 
-<form class="form" id="f">
-  <h1>웹사이트 제작 의뢰</h1>
-  <p class="sub">접수하면 영업(sales) 에이전트가 바로 검토를 시작합니다.</p>
+    <div class="row">
+      <div class="f"><label>회사 / 서비스 이름<span class="req">*</span></label>
+        <input class="box" name="company" required placeholder="밀밭제과"></div>
+      <div class="f"><label>업종<span class="req">*</span></label>
+        <input class="box" name="industry" required placeholder="제과 / 베이커리"></div>
+    </div>
 
-  <div class="row">
-    <div class="f"><label>회사 / 서비스 이름<span class="req">*</span></label>
-      <input name="company" required placeholder="밀밭제과"></div>
-    <div class="f"><label>업종<span class="req">*</span></label>
-      <input name="industry" required placeholder="제과 / 베이커리"></div>
-  </div>
+    <div class="f">
+      <label>목적 <span class="why">한 문장으로. 이게 SRS 의 출발점이 됩니다.</span><span class="req">*</span></label>
+      <input class="box" name="purpose" required
+             placeholder="동네 단골이 온라인으로 빵을 예약 주문할 수 있게 한다"></div>
 
-  <div class="f"><label>목적 (한 문장)<span class="req">*</span></label>
-    <input name="purpose" required placeholder="동네 단골이 온라인으로 주문할 수 있게 한다"></div>
+    <div class="f">
+      <label>필요 기능 <span class="why">고른 개수만큼 화면이 늘어납니다. 욕심내면 미완성으로 끝납니다.</span><span class="req">*</span></label>
+      <div class="feat" id="feat"></div></div>
 
-  <div class="f"><label>필요 기능<span class="req">*</span></label>
-    <div class="feat" id="feat"></div></div>
+    <div class="f">
+      <label>톤 &amp; 매너 <span class="why">디자이너가 이 문장을 실제 색값으로 옮깁니다.</span></label>
+      <input class="box" name="reference" placeholder="따뜻하고 아날로그한 느낌. 갓 구운 빵 같은 색."></div>
 
-  <div class="row">
-    <div class="f"><label>납기 희망일<span class="req">*</span></label>
-      <input type="date" name="due_date" required></div>
-    <div class="f"><label>요구 종류</label>
-      <select name="kind">
-        <option value="new">신규 개발</option>
-        <option value="change">변경 요청</option>
-        <option value="defect">결함 신고</option>
-        <option value="security">보안 이슈</option>
-      </select></div>
-  </div>
+    <div class="row">
+      <div class="f"><label>납기 희망일<span class="req">*</span></label>
+        <input class="box" type="date" name="due_date" required></div>
+      <div class="f"><label>예산 <span class="why">가상 크레딧</span></label>
+        <input class="box" type="number" name="budget" placeholder="1000"></div>
+    </div>
 
-  <div class="f"><label>참고 사이트 / 톤&amp;매너</label>
-    <input name="reference" placeholder="따뜻하고 아날로그한 느낌"></div>
+    <div class="row">
+      <div class="f"><label>담당자 이름<span class="req">*</span></label>
+        <input class="box" name="contact_name" required placeholder="김밀밭"></div>
+      <div class="f"><label>연락처<span class="req">*</span></label>
+        <input class="box" name="contact" required placeholder="010-0000-0000"></div>
+    </div>
 
-  <div class="row">
-    <div class="f"><label>담당자 이름<span class="req">*</span></label>
-      <input name="contact_name" required></div>
-    <div class="f"><label>연락처<span class="req">*</span></label>
-      <input name="contact" required placeholder="010-0000-0000"></div>
-  </div>
+    <label class="muted" style="display:flex;gap:.5rem;align-items:center;margin:.3rem 0 .6rem">
+      <input type="checkbox" id="auto" checked> 접수하면 바로 시작한다 (끄면 대기 상태로 만듭니다)
+    </label>
 
-  <div class="f"><label>예산 (가상 크레딧)</label>
-    <input type="number" name="budget" placeholder="1000"></div>
+    <button class="btn primary submit" type="submit">주문 접수하고 시작</button>
+  </form>
 
-  <button class="submit" type="submit">주문 접수</button>
-  <div class="result" id="res"></div>
-</form>
+  <aside style="display:flex;flex-direction:column;gap:1rem">
+    <div class="card">
+      <h3>여기는 <b>새 일</b>을 맡기는 곳입니다</h3>
+      <div class="warn">
+        이미 만들어진 것을 <b>고쳐 달라는 요청</b>은 여기가 아닙니다.<br>
+        만들어진 화면을 <b>보면서</b> 말해야 정확합니다 —
+        <a class="link" href="/review.html">👀 보고 고치기</a> 로 가세요.
+      </div>
+      <p class="muted" style="margin:.7rem 0 .3rem">접수하면 이렇게 흘러갑니다</p>
+      <ol class="steps">
+        <li><b>영업</b>이 범위를 합의합니다 (하는 것 / 안 하는 것)</li>
+        <li><b>기획</b>이 요구사항과 화면을 확정하고, 11명의 지시문을 채웁니다</li>
+        <li>👥 <b>학생 11명이 자기 AGENT.md 를 고칩니다</b> — 여기서 멈춥니다</li>
+        <li>설계 → 구현 → QA·보안·검수 게이트 → 배포 → 운영</li>
+      </ol>
+      <p class="muted">한 사이클에 25~40분. 진행은
+        <a class="link" href="/console.html">🖥 실시간 콘솔</a>에서 그대로 보입니다.</p>
+    </div>
 
+    <div class="card recent">
+      <h3>최근 주문 <span class="act"><button class="btn sm" id="rf">↻</button></span></h3>
+      <div id="recent"><span class="muted">불러오는 중…</span></div>
+    </div>
+  </aside>
+</div>
+
+<script src="/assets/ui.js"></script>
 <script>
-const FEATURES = ["로그인","게시판","상품목록","장바구니","결제(모의)","문의폼","관리자","검색"];
-document.getElementById("feat").innerHTML = FEATURES.map(f =>
+const FEATURES = ["상품목록","상품상세","예약주문","장바구니","문의폼","로그인","게시판","검색","관리자","결제(모의)"];
+nav('<span id="cyc" class="muted"></span>');
+cycleBadge($("cyc"));
+
+$("feat").innerHTML = FEATURES.map(f =>
   `<label><input type="checkbox" name="features" value="${f}">${f}</label>`).join("");
 
-document.getElementById("f").addEventListener("submit", async (e) => {
+const d = new Date(Date.now() + 7 * 864e5);
+document.querySelector("[name=due_date]").value = d.toISOString().slice(0, 10);
+
+async function recent() {
+  try {
+    const os = await api("/api/orders");
+    $("recent").innerHTML = os.slice(0, 8).map(o =>
+      `<a href="/projects.html">#${o.id} ${esc(o.title)}
+         <span class="muted">· ${esc(o.kind)} · ${esc(o.status)}</span></a>`).join("")
+      || `<span class="muted">아직 없습니다</span>`;
+  } catch { $("recent").innerHTML = `<span class="muted">불러올 수 없습니다</span>`; }
+}
+$("rf").onclick = recent;
+
+$("f").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const fd = new FormData(e.target);
+  const fd = new FormData($("f"));
   const features = fd.getAll("features");
-  if (!features.length) { show("err", "필요 기능을 하나 이상 선택해 주세요."); return; }
+  if (!features.length) { toast("필요 기능을 하나 이상 고르세요", "bad"); return; }
+  const btn = $("f").querySelector("button[type=submit]");
   const body = {
     company: fd.get("company"), industry: fd.get("industry"),
     purpose: fd.get("purpose"), features,
-    due_date: fd.get("due_date"), kind: fd.get("kind"),
-    reference: fd.get("reference") || null,
+    due_date: fd.get("due_date"), kind: "new",
     contact_name: fd.get("contact_name"), contact: fd.get("contact"),
+    reference: fd.get("reference") || null,
     budget: fd.get("budget") ? Number(fd.get("budget")) : null,
+    auto_start: $("auto").checked,
   };
-  try {
-    const r = await fetch("/api/orders", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const j = await r.json();
-    if (!r.ok || !j.ok) { show("err", j.error || j.detail || "접수에 실패했습니다."); return; }
-    show("ok", `접수 완료 — 주문 #${j.data.order_id}, 사이클 #${j.data.cycle.id} 이 시작됩니다. ` +
-               `픽셀 오피스에서 진행 상황을 볼 수 있습니다.`);
-    e.target.reset();
-  } catch (err) { show("err", "서버에 연결할 수 없습니다."); }
+  const r = await act(btn, () => api("/api/orders", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body) }), "접수했습니다").catch(() => null);
+  if (!r) return;
+  toast(`주문 #${r.order_id} 접수 — 사이클 #${r.cycle.id} ${$("auto").checked ? "시작됨" : "대기 중"}\n실시간 콘솔로 이동합니다.`, "ok", 5000);
+  recent();
+  setTimeout(() => location.href = "/console.html", 1500);
 });
 
-function show(kind, msg) {
-  const el = document.getElementById("res");
-  el.className = "result " + kind;
-  el.textContent = msg;
-}
+recent();
 </script>
 </body>
 </html>

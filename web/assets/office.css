@@ -308,3 +308,10 @@ textarea.box:focus,input.box:focus,select.box:focus{
   border-radius:9px;padding:.42rem .9rem;cursor:pointer;font:inherit;font-weight:650}
 .tabs button.on{background:#1b2740;color:var(--fg);border-color:#33507f}
 .empty{color:var(--dim);padding:1.2rem;text-align:center;font-size:.98rem}
+
+/* 접수 카운터의 화면 이동 링크 */
+.navto{display:flex;flex-direction:column;gap:.3rem;margin-top:.5rem}
+.navto a{display:block;padding:.4rem .6rem;border-radius:8px;background:#121824;
+  border:1.5px solid var(--line);color:var(--fg);text-decoration:none;
+  font-size:.94rem;font-weight:650}
+.navto a:hover{background:#222c3c;border-color:#48587a}
